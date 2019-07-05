@@ -8,7 +8,7 @@ The spinning up implementation SAC is very compact and easily extensible for qui
 TODO
 2. Collect train/test rollouts into a single 'collect episode' function similar to TF agent's drivers for the modular version.
 
-With the same inputs and weight initializations I've checked that up to 1000 gradient steps result in identical end weights to 6 decimal places, and this is confirmed by effectively identical performance on Cartpole and Reacher2D. 
+With the same inputs and weight initializations I've checked that up to 1000 gradient steps result in identical end weights to 3 decimal places, and this is confirmed by effectively identical performance on Cartpole and Reacher2D. 
 
 Also see this link for a colab version of the modular version. https://colab.research.google.com/drive/1QwIThAaK5F-DtV5o36XXP2-_rxWWsv8S
 
