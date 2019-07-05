@@ -1,0 +1,9 @@
+/SAC_modular/saved_models/*
+/SAC_modular/logs/*
+/SAC_modular/__pycache__/*
+/SAC_modular/ipynb_checkpoints/*
+/SAC/saved_models/*
+/SAC/desired_sac_outputs.txt
+/SAC/logs/*
+/SAC/saved_models/*
+/SAC/__pycache__/*
