@@ -12,5 +12,5 @@ With the same inputs and weight initializations I've checked that up to 1000 gra
 
 Also see this link for a colab version of the modular version. https://colab.research.google.com/drive/1QwIThAaK5F-DtV5o36XXP2-_rxWWsv8S
 
-## Cartpole-V0 Return vs Environment Steps
+## Cartpole-V0 Return vs Environment Steps (takes ~50s)
 ![Cartpole-V0 Return vs Environment Steps](https://github.com/sholtodouglas/SAC_TF2/blob/master/images/SAC%20performance.png)
