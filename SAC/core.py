@@ -125,7 +125,7 @@ def load_weights(models, exp_name):
 def save_weights(models, exp_name):
       try:
 
-          os.mkdirs('saved_models/'+exp_name)
+          os.mkdir('saved_models/'+exp_name)
       except Exception as e:
           print(e)
           pass

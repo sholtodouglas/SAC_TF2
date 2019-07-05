@@ -275,7 +275,7 @@ class SAC_model():
 
   def save_weights(self):
       try:
-          os.mkdirs('saved_models/'+self.exp_name)
+          os.mkdir('saved_models/'+self.exp_name)
       except Exception as e:
           #print(e)
           pass
