@@ -258,6 +258,12 @@ class SAC_model():
   def get_action(self, o, deterministic=False):
     mu, pi, logp_pi = self.actor(o.reshape(1,-1))
     return  mu[0] if deterministic else pi[0]
+
+  # have this function because it makes it simplifies the code in the trajectory collection part
+  # lets us just pass some arbitrary 'actor function' that makes decisions.
+  def get_deterministic_action(self, o):
+    return self.get_action(o, deterministic=True)
+
   
   
   def load_weights(self):
