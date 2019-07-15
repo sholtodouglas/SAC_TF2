@@ -8,8 +8,8 @@ from SAC import *
 from train import *
 
 
-observations= np.load('collected_data/expert_obs_Pendulum-v0_Hidden_32l_21000.npy').astype('float32')
-actions = np.load('collected_data/expert_actions_Pendulum-v0_Hidden_32l_21000.npy').astype('float32')
+observations= np.load('collected_data/expert_obs_reacher2D-v0_Hidden_128l_210000.npy').astype('float32')
+actions = np.load('collected_data/expert_actions_reacher2D-v0_Hidden_128l_210000.npy').astype('float32')
 
 train_length = int(0.9*(len(observations)))
 print(train_length)
@@ -21,8 +21,14 @@ valid_acts = actions[train_length:,:]
 print(train_obs.shape)
 print(valid_obs.shape)
 
-#act_limit = 1.0 # for reacher env
-act_limit = 2.0 # for Pendulum
+
+#ENV_NAME='Pendulum-v0'
+
+ENV_NAME = 'reacher2D-v0'
+env = gym.make(ENV_NAME)
+act_dim = env.action_space.shape[0]
+act_limit = self.env.action_space.high[0]
+
 start_time = time.time()
 train_log_dir = 'logs/'+ 'BC:'+str(start_time)
 train_summary_writer = tf.summary.create_file_writer(train_log_dir)
@@ -30,8 +36,7 @@ policy  = mlp_gaussian_policy(act_dim = actions.shape[1], act_limit = act_limit,
 optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)
 max_ep_len = 200
 
-ENV_NAME='Pendulum-v0'
-env = gym.make(ENV_NAME)
+
 
 # do like this so we can sub into our trajectory rollerouter.
 def get_action(o):
@@ -78,8 +83,8 @@ for t in range(train_steps):
     with train_summary_writer.as_default():
          tf.summary.scalar('BC_MSE_loss',BC_loss, step=t)
         
-    if t % 1000 ==0:
-      rollout_trajectories(n_steps = max_ep_len,env = env, max_ep_len = max_ep_len, actor = get_action, summary_writer=train_summary_writer, current_total_steps = t,train = False, render = False)
+    if t % 3000 ==0:
+      rollout_trajectories(n_steps = max_ep_len,env = env, max_ep_len = max_ep_len, actor = get_action, summary_writer=train_summary_writer, current_total_steps = t,train = False, render = True, exp_name = ENV_NAME)
       
       indexes = np.random.choice(valid_obs.shape[0], 512)
       batch_obs = valid_obs[indexes, :]

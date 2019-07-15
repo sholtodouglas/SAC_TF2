@@ -43,7 +43,9 @@ def rollout_trajectories(n_steps,env, max_ep_len = 200, actor = None, replay_buf
       else:
         a = actor(o)
       # Step the env
+      #print(a)
       o2, r, d, _ = env.step(a)
+      
       
       if render:
         env.render(mode='human')
@@ -152,7 +154,7 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env', type=str, default='Pendulum-v0')
+    parser.add_argument('--env', type=str, default='reacher2D-v0')
     parser.add_argument('--hid', type=int, default=128)
     parser.add_argument('--l', type=int, default=2)
     parser.add_argument('--gamma', type=float, default=0.99)

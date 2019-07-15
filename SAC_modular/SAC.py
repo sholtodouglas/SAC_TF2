@@ -100,6 +100,11 @@ class mlp_gaussian_policy(Model):
 
     return mu, pi, logp_pi
   
+  def get_deterministic_action(self,o):
+
+    mu,_,_ = self.call(o.reshape(1,-1))
+  
+    return mu[0]
 #@title Replay Buffer { display-mode: "form" }
 # End Core, begin SAC.
 class ReplayBuffer:
