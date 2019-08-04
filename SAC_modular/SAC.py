@@ -187,8 +187,7 @@ class SAC_model():
   def create_networks(self,obs_dim, act_dim, hidden_sizes = [32,32], batch_size = 100, activation = 'relu'):
     
     # Get Env dimensions
-    obs_dim = self.env.observation_space.shape[0]
-    act_dim = self.env.action_space.shape[0]
+ 
     # Action limit for clamping: critically, assumes all dimensions share the same bound!
     act_limit = self.env.action_space.high[0]
     
