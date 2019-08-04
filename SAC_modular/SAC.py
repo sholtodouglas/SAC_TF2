@@ -12,6 +12,10 @@ print(tf.__version__)
 import pybullet
 import reach2D
 
+import tensorflow_probability as tfp
+tfd = tfp.distributions
+
+
 #@title Building Blocks and Probability Func{ display-mode: "form" }
 EPS = 1e-8
 
@@ -86,7 +90,13 @@ class mlp_gaussian_policy(Model):
     log_std = self.log_std(x)
     log_std = LOG_STD_MIN + 0.5 * (LOG_STD_MAX - LOG_STD_MIN) * (log_std + 1)
     std = tf.exp(log_std)
+
+    pdf = tfd.Normal(loc=mu,scale=std)
+    # pi = pdf.sample()
+    # logp_pi = tf.reduce_sum(pdf.log_prob(pi))
     pi = mu + tf.random.normal(tf.shape(input=mu)) * std
+
+
     logp_pi = gaussian_likelihood(pi, mu, log_std)
     
     
@@ -98,13 +108,21 @@ class mlp_gaussian_policy(Model):
     mu *= action_scale
     pi *= action_scale
 
-    return mu, pi, logp_pi
+    return mu, pi, logp_pi, std, pdf
   
+
+  # have this function because it makes it simplifies the code in the trajectory collection part
+  # lets us just pass some arbitrary 'actor function' that makes decisions.
+  # This vastly simplifies interoperability with GAIL and the representation learning
   def get_deterministic_action(self,o):
 
-    mu,_,_ = self.call(o.reshape(1,-1))
+    mu,_,_,_,_ = self.call(o.reshape(1,-1))
   
     return mu[0]
+
+  def get_stochastic_action(self, o):
+    _, pi, _, _, _ = self.call(o.reshape(1,-1))
+    return  pi[0]
 #@title Replay Buffer { display-mode: "form" }
 # End Core, begin SAC.
 class ReplayBuffer:
@@ -140,7 +158,7 @@ class ReplayBuffer:
 #@title SAC Model{ display-mode: "form" }
 class SAC_model():
   
-  def __init__(self, env, obs_dim, act_dim, hidden_sizes,lr = 0.003,gamma = None, alpha = None, polyak = None,  load = False, exp_name = 'Exp1'):
+  def __init__(self, env, obs_dim, act_dim, hidden_sizes,lr = 0.003,gamma = None, alpha = None, polyak = None,  load = False, exp_name = 'Exp1', path = 'saved_models/'):
     self.env = env
     self.pi_optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
     self.value_optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
@@ -149,6 +167,7 @@ class SAC_model():
     self.polyak = polyak
     self.load = load
     self.exp_name = exp_name
+    self.path = path
     self.create_networks(obs_dim, act_dim, hidden_sizes)
 
     
@@ -192,7 +211,7 @@ class SAC_model():
     
     if self.load:
       
-        self.load_weights()
+        self.load_weights(self.path)
       
       
     # Initializing targets to match main variables
@@ -218,7 +237,7 @@ class SAC_model():
       r = batch['rews']
       d = batch['done']
 
-      mu, pi, logp_pi = self.actor(x)
+      mu, pi, logp_pi, _, _ = self.actor(x)
 
       q1 = tf.squeeze(self.q_func1(tf.concat([x,a], axis=-1)))
       q1_pi = tf.squeeze(self.q_func1(tf.concat([x,pi], axis=-1)))
@@ -260,23 +279,15 @@ class SAC_model():
     return pi_loss, q1_loss, q2_loss, v_loss, q1, q2, v, logp_pi
   
   
-  def get_action(self, o, deterministic=False):
-    mu, pi, logp_pi = self.actor(o.reshape(1,-1))
-    return  mu[0] if deterministic else pi[0]
 
-  # have this function because it makes it simplifies the code in the trajectory collection part
-  # lets us just pass some arbitrary 'actor function' that makes decisions.
-  def get_deterministic_action(self, o):
-    return self.get_action(o, deterministic=True)
 
   
-  
-  def load_weights(self):
+  def load_weights(self, path = 'saved_models/'):
     try:
       print('Loading in network weights...')
 
       for name,model in self.models.items():
-        model.load_weights('saved_models/'+self.exp_name+'/'+name+'.h5')
+        model.load_weights(path+self.exp_name+'/'+name+'.h5')
 
       print('Loaded.')
     except:
@@ -284,16 +295,16 @@ class SAC_model():
 
 
 
-  def save_weights(self):
+  def save_weights(self, path = 'saved_models/'):
       try:
-          os.makedirs('saved_models/'+self.exp_name)
+          os.makedirs(path+self.exp_name)
       except Exception as e:
           #print(e)
           pass
 
       for name,model in self.models.items():
-        model.save_weights('saved_models/'+self.exp_name+'/'+name+'.h5')
-      print("Model Saved at ", self.exp_name)
+        model.save_weights(path+self.exp_name+'/'+name+'.h5')
+      print("Model Saved at ", path+self.exp_name)
   
 
  

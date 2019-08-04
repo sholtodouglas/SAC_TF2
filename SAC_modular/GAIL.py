@@ -230,7 +230,7 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
     # now act with our actor, and alternately collect data, then train.
     while steps_collected < total_steps:
     # collect an episode
-        steps_collected  += rollout_trajectories(n_steps = max_ep_len,env = env, max_ep_len = max_ep_len, actor = SAC.get_action, replay_buffer = replay_buffer, summary_writer=summary_writer, current_total_steps = steps_collected, exp_name= exp_name)
+        steps_collected  += rollout_trajectories(n_steps = max_ep_len,env = env, max_ep_len = max_ep_len, actor = SAC.actor.get_stochastic_action, replay_buffer = replay_buffer, summary_writer=summary_writer, current_total_steps = steps_collected, exp_name= exp_name)
         # take than many training steps
         update_models(SAC, replay_buffer, steps = max_ep_len, batch_size = batch_size, current_step = steps_collected)
 
@@ -238,7 +238,7 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
         if steps_collected  > 0 and steps_collected  % steps_per_epoch == 0:
             SAC.save_weights()
             # Test the performance of the deterministic version of the agent.
-            rollout_trajectories(n_steps = max_ep_len*10,env = test_env, max_ep_len = max_ep_len, actor = SAC.get_deterministic_action, summary_writer=summary_writer, current_total_steps = steps_collected, train = False, render = True, exp_name= exp_name)
+            rollout_trajectories(n_steps = max_ep_len*10,env = test_env, max_ep_len = max_ep_len, actor = SAC.actor.get_deterministic_action, summary_writer=summary_writer, current_total_steps = steps_collected, train = False, render = True, exp_name= exp_name)
 
 
 # MODIFIABLE VARIBALES TODO PROPERLY PUT THIS IN A CLASS
