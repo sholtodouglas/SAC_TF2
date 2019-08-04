@@ -30,7 +30,7 @@ def rollout_trajectories(n_steps,env, max_ep_len = 200, actor = None, replay_buf
   o, r, d, ep_ret, ep_len = env.reset(), 0, False, 0, 0
   
   if start_state != None:
-    if point in exp_name:
+    if 'point' in exp_name:
       env.initalize_start_pos(start_state[0:2], start_state[2:4]) #init vel to 0, but x and y to the desired pos. 
       o[0:4] = start_state[0:4]
     else:
