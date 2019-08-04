@@ -4,6 +4,7 @@ import gym
 import time
 import pybullet
 import reach2D
+import pointMass
 from SAC import *
 
 
@@ -15,7 +16,7 @@ def rollout_trajectories(n_steps,env, max_ep_len = 200, actor = None, replay_buf
 
   ###################  quick fix for the need for this to activate rendering pre env reset.  ################### 
    ###################  MUST BE A BETTER WAY? Env realising it needs to change pybullet client?  ################### 
-  if 'reacher'  in exp_name:
+  if 'reacher'  or 'point' or 'robot' in exp_name:
     pybullet = True
   else:
     pybullet = False
@@ -62,7 +63,7 @@ def rollout_trajectories(n_steps,env, max_ep_len = 200, actor = None, replay_buf
       d = False if ep_len==max_ep_len else d
 
       # Store experience to replay buffer
-      if train:
+      if replay_buffer:
         replay_buffer.store(o, a, r, o2, d)
 
       # Super critical, easy to overlook step: make sure to update 
@@ -86,8 +87,8 @@ def rollout_trajectories(n_steps,env, max_ep_len = 200, actor = None, replay_buf
 
 
   if collect_trajectories:
-    np.save('collected_data/expert_actions_'+exp_name+str(n_steps),np.array(actions))
-    np.save('collected_data/expert_obs_'+exp_name+str(n_steps),np.array(observations))
+    np.save('collected_data/'+str(n_steps)+exp_name+'expert_actions',np.array(actions))
+    np.save('collected_data/'+str(n_steps)+exp_name+'expert_obs_',np.array(observations))
 
 
   return n_steps
@@ -98,13 +99,14 @@ def rollout_trajectories(n_steps,env, max_ep_len = 200, actor = None, replay_buf
 
 # This is our training loop.
 def training_loop(env_fn,  ac_kwargs=dict(), seed=0, 
-        steps_per_epoch=5000, epochs=100, replay_size=int(1e6), gamma=0.99, 
-        polyak=0.995, lr=1e-3, alpha=0.2, batch_size=100, start_steps=5000, 
+        steps_per_epoch=2000, epochs=100, replay_size=int(1e6), gamma=0.99, 
+        polyak=0.995, lr=1e-3, alpha=0.2, batch_size=100, start_steps=3000, 
         max_ep_len=1000, save_freq=1, load = False, exp_name = "Experiment_1", render = False):
     
   tf.random.set_seed(seed)
   np.random.seed(seed)
   env, test_env = env_fn(), env_fn()
+
   # Get Env dimensions
   obs_dim = env.observation_space.shape[0]
   act_dim = env.action_space.shape[0]
@@ -126,10 +128,10 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
   total_steps = steps_per_epoch * epochs
   steps_collected = 0
 
+  if not load:
   # collect some initial random steps to initialise
-  random_steps = 5000
-  steps_collected  += rollout_trajectories(n_steps = random_steps,env = env, max_ep_len = max_ep_len, actor = 'random', replay_buffer = replay_buffer, summary_writer = summary_writer, exp_name = exp_name)
-  update_models(SAC, replay_buffer, steps = random_steps, batch_size = batch_size)
+    steps_collected  += rollout_trajectories(n_steps = start_steps,env = env, max_ep_len = max_ep_len, actor = 'random', replay_buffer = replay_buffer, summary_writer = summary_writer, exp_name = exp_name)
+    update_models(SAC, replay_buffer, steps = steps_collected, batch_size = batch_size)
 
   # now act with our actor, and alternately collect data, then train.
   while steps_collected < total_steps:
@@ -166,7 +168,7 @@ if __name__ == '__main__':
     parser.add_argument('--render', type=bool, default=False)
     args = parser.parse_args()
 
-    experiment_name = args.env+'_Hidden_'+str(args.hid)+'l_'+str(args.l)
+    experiment_name = 'no_reset_vel_'+args.env+'_Hidden_'+str(args.hid)+'l_'+str(args.l)
 
     training_loop(lambda : gym.make(args.env), 
       ac_kwargs=dict(hidden_sizes=[args.hid]*args.l),

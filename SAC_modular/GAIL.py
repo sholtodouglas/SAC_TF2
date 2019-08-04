@@ -10,8 +10,17 @@ from train import *
 # expert_obs = np.load('collected_data/expert_obs_Pendulum-v0_Hidden_32l_21000.npy')
 # expert_acts = np.load('collected_data/expert_actions_Pendulum-v0_Hidden_32l_21000.npy')
 
-expert_obs= np.load('collected_data/expert_obs_reacher2D-v0_Hidden_128l_25000.npy').astype('float32')
-expert_acts = np.load('collected_data/expert_actions_reacher2D-v0_Hidden_128l_25000.npy').astype('float32')
+# expert_obs= np.load('collected_data/expert_obs_reacher2D-v0_Hidden_128l_25000.npy').astype('float32')
+# expert_acts = np.load('collected_data/expert_actions_reacher2D-v0_Hidden_128l_25000.npy').astype('float32')
+
+# expert_obs= np.load('collected_data/10000no_reset_vel_pointMass-v0_Hidden_128l_2expert_obs_.npy').astype('float32')
+# expert_acts= np.load('collected_data/10000no_reset_vel_pointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
+
+
+expert_obs= np.load('collected_data/11000seg_pointMass-v0_Hidden_128l_2expert_obs_.npy').astype('float32')
+expert_acts= np.load('collected_data/11000seg_pointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
+
+
 
 # a replay buffer where we can purge non informative transitions?
 class ReplayBuffer:
@@ -76,9 +85,10 @@ class mlp_gail_discriminator(Model):
     return prob
 
 
-def discriminator_train_step(batch, expert_batch,  discriminator, discriminator_optimizer, replay_buffer, batch_size = 100):
+def discriminator_train_step(batch, expert_batch,  discriminator, discriminator_optimizer, replay_buffer, batch_size = 100, discrim_req_acc = 0.7):
     batch_obs, batch_acts = batch['obs1'], batch['acts']
     batch_expert_obs, batch_expert_acts = expert_batch['obs'], expert_batch['acts']
+    
     with tf.GradientTape() as tape:
         # We'd like to maximise the log probability of the expert actions, and minmise log prob of generated actions.
         expert_probs = discriminator(batch_expert_obs,batch_expert_acts)
@@ -101,11 +111,16 @@ def discriminator_train_step(batch, expert_batch,  discriminator, discriminator_
         loss = tf.reduce_sum(expert_loss + agent_loss)
         expert_accuracy = tf.reduce_mean(tf.cast(expert_probs > 0.5, tf.float32))
         agent_accuracy  = tf.reduce_mean(tf.cast(agent_probs < 0.5, tf.float32))
+        
 
 
         
     gradients = tape.gradient(loss, discriminator.trainable_variables)
-    discriminator_optimizer.apply_gradients(zip(gradients, discriminator.trainable_variables))
+    
+    if agent_accuracy < discrim_req_acc or expert_accuracy < discrim_req_acc:
+        print('Updating Discriminator')
+        discriminator_optimizer.apply_gradients(zip(gradients, discriminator.trainable_variables))
+
     return loss.numpy(), expert_accuracy.numpy(), agent_accuracy.numpy()
 
 
@@ -131,12 +146,13 @@ def BC_step(expert_batch, policy, optimizer):
 #     return BC_loss
 
 def pretrain_BC(model, BC_optimizer, batch_size):
-
-    for i in range(0,60000):
+    print('Beginning Pretraining')
+    for i in range(0,10000):
         expert_batch = sample_expert_transitions(batch_size)
         BC_loss = BC_step(expert_batch, model.actor, BC_optimizer)
-        if i % 10000 == 0:
-            print('Still pretraining')
+        if i % 5000 == 0:
+            print(BC_loss) 
+    print('Ending Pretraining')
 
 
 
@@ -175,7 +191,7 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
         while agent_accuracy < discrim_req_acc or expert_acurracy < discrim_req_acc:
             batch = replay_buffer.sample_batch(batch_size)
             expert_batch = sample_expert_transitions(batch_size)
-            _,expert_acurracy,agent_accuracy = discriminator_train_step(batch, expert_batch, discriminator, discriminator_optimizer, replay_buffer, batch_size)
+            _,expert_acurracy,agent_accuracy = discriminator_train_step(batch, expert_batch, discriminator, discriminator_optimizer, replay_buffer, batch_size, discrim_req_acc)
             print(expert_acurracy, agent_accuracy)
 
         # now update SAC
@@ -220,7 +236,7 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
 
         # if an epoch has elapsed, save and test.
         if steps_collected  > 0 and steps_collected  % steps_per_epoch == 0:
-            #SAC.save_weights()
+            SAC.save_weights()
             # Test the performance of the deterministic version of the agent.
             rollout_trajectories(n_steps = max_ep_len*10,env = test_env, max_ep_len = max_ep_len, actor = SAC.get_deterministic_action, summary_writer=summary_writer, current_total_steps = steps_collected, train = False, render = True, exp_name= exp_name)
 
@@ -230,21 +246,21 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env', type=str, default='Pendulum-v0')
+    parser.add_argument('--env', type=str, default='reacher2D-v0')
     parser.add_argument('--hid', type=int, default=128)
     parser.add_argument('--l', type=int, default=2)
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--seed', '-s', type=int, default=20)
     parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--max_ep_len', type=int, default=200)
-    parser.add_argument('--exp_name', type=str, default='experiment_1')
+    parser.add_argument('--exp_name', type=str, default='GAIL')
     parser.add_argument('--load', type=bool, default=False)
     parser.add_argument('--render', type=bool, default=False)
     parser.add_argument('--discrim_req_acc', type = float, default = 0.7)
     parser.add_argument('--BC', type = bool, default = False)
     args = parser.parse_args()
 
-    experiment_name = args.env+'_Hidden_'+str(args.hid)+'l_'+str(args.l)
+    experiment_name = 'GAIL'+args.env+'_Hidden_'+str(args.hid)+'l_'+str(args.l)
 
     training_loop(lambda : gym.make(args.env), 
       ac_kwargs=dict(hidden_sizes=[args.hid]*args.l),

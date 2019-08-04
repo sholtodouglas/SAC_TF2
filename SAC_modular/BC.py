@@ -4,12 +4,26 @@ import gym
 import time
 import pybullet
 import reach2D
+import pointMass
 from SAC import *
 from train import *
 
 
-observations= np.load('collected_data/expert_obs_reacher2D-v0_Hidden_128l_210000.npy').astype('float32')
-actions = np.load('collected_data/expert_actions_reacher2D-v0_Hidden_128l_210000.npy').astype('float32')
+# observations= np.load('collected_data/10000seg_reacher2D-v0_Hidden_128l_2expert_obs_.npy').astype('float32')
+# actions = np.load('collected_data/10000seg_reacher2D-v0_Hidden_128l_2expert_actions.npy').astype('float32')
+
+# observations= np.load('collected_data/10000pos_cntrl_exp_pointMass-v0_Hidden_128l_2expert_obs_.npy').astype('float32')
+# actions = np.load('collected_data/10000pos_cntrl_exp_pointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
+
+# observations= np.load('collected_data/10000no_reset_vel_pointMass-v0_Hidden_128l_2expert_obs_.npy').astype('float32')
+# actions= np.load('collected_data/10000no_reset_vel_pointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
+
+observations= np.load('collected_data/11000seg_pointMass-v0_Hidden_128l_2expert_obs_.npy').astype('float32')
+actions= np.load('collected_data/11000seg_pointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
+
+
+
+
 
 train_length = int(0.9*(len(observations)))
 print(train_length)
@@ -21,13 +35,12 @@ valid_acts = actions[train_length:,:]
 print(train_obs.shape)
 print(valid_obs.shape)
 
-
 #ENV_NAME='Pendulum-v0'
-
-ENV_NAME = 'reacher2D-v0'
+#ENV_NAME = 'reacher2D-v0'
+ENV_NAME = 'pointMass-v0'
 env = gym.make(ENV_NAME)
 act_dim = env.action_space.shape[0]
-act_limit = self.env.action_space.high[0]
+act_limit = env.action_space.high[0]
 
 start_time = time.time()
 train_log_dir = 'logs/'+ 'BC:'+str(start_time)
@@ -70,7 +83,7 @@ def test_step(obs,expert_act):
     return BC_loss
 
 # Training Loop
-train_steps = 100000
+train_steps = 200000
 batch_size = 512
 
 
