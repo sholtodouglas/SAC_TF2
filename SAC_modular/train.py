@@ -7,6 +7,7 @@ import reach2D
 import pointMass
 from SAC import *
 
+#TODO change the env initialise start pos to a more general form of the function
 
 # collects a n_steps steps for the replay buffer.
 def rollout_trajectories(n_steps,env, max_ep_len = 200, actor = None, replay_buffer = None, summary_writer = None, current_total_steps = 0, render = False, train = True, collect_trajectories = False, exp_name = None, z = None, s_g = None, goal_index = None, return_trajectory = False, replay_trajectory = None, start_state = None):
@@ -29,8 +30,11 @@ def rollout_trajectories(n_steps,env, max_ep_len = 200, actor = None, replay_buf
   o, r, d, ep_ret, ep_len = env.reset(), 0, False, 0, 0
   
   if start_state != None:
-    env.initalize_start_pos(start_state[0:2], start_state[2:4]) #init vel to 0, but x and y to the desired pos. 
-    o[0:4] = start_state[0:4]
+    if point in exp_name:
+      env.initalize_start_pos(start_state[0:2], start_state[2:4]) #init vel to 0, but x and y to the desired pos. 
+      o[0:4] = start_state[0:4]
+    else:
+      raise NotImplementedError
 
   # if we want to store expert actions
   if collect_trajectories or return_trajectory:
