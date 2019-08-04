@@ -9,11 +9,8 @@ from SAC import *
 
 
 # collects a n_steps steps for the replay buffer.
-def rollout_trajectories(n_steps,env, max_ep_len = 200, actor = None, replay_buffer = None, summary_writer = None, current_total_steps = 0, render = False, train = True, collect_trajectories = False, exp_name = None):
-
+def rollout_trajectories(n_steps,env, max_ep_len = 200, actor = None, replay_buffer = None, summary_writer = None, current_total_steps = 0, render = False, train = True, collect_trajectories = False, exp_name = None, z = None, s_g = None, goal_index = None, return_trajectory = False, replay_trajectory = None, start_state = None):
   # reset the environment
-
-
   ###################  quick fix for the need for this to activate rendering pre env reset.  ################### 
    ###################  MUST BE A BETTER WAY? Env realising it needs to change pybullet client?  ################### 
   if 'reacher'  or 'point' or 'robot' in exp_name:
@@ -30,9 +27,13 @@ def rollout_trajectories(n_steps,env, max_ep_len = 200, actor = None, replay_buf
 
 
   o, r, d, ep_ret, ep_len = env.reset(), 0, False, 0, 0
+  
+  if start_state != None:
+    env.initalize_start_pos(start_state[0:2], start_state[2:4]) #init vel to 0, but x and y to the desired pos. 
+    o[0:4] = start_state[0:4]
 
   # if we want to store expert actions
-  if collect_trajectories:
+  if collect_trajectories or return_trajectory:
     actions = []
     observations = []
 
@@ -41,16 +42,21 @@ def rollout_trajectories(n_steps,env, max_ep_len = 200, actor = None, replay_buf
 
       if actor == 'random':
         a = env.action_space.sample()
+      elif replay_trajectory != None: # replay a trajectory that we've fed in so that we can make sure this is properly deterministic and compare it to our estimated action based trajectory/
+        a = replay_trajectory[t]
+      elif z != None and s_g != None:
+        o = o[:goal_index] # take up till the goal, since the internal goal doesn't matter we are suppling it with one. 
+        a = actor(o, z, s_g)
       else:
         a = actor(o)
       # Step the env
-      #print(a)
+      
       o2, r, d, _ = env.step(a)
       
       
       if render:
         env.render(mode='human')
-      if collect_trajectories:
+      if collect_trajectories or return_trajectory:
         actions.append(a)
         observations.append(o)
 
@@ -90,7 +96,8 @@ def rollout_trajectories(n_steps,env, max_ep_len = 200, actor = None, replay_buf
     np.save('collected_data/'+str(n_steps)+exp_name+'expert_actions',np.array(actions))
     np.save('collected_data/'+str(n_steps)+exp_name+'expert_obs_',np.array(observations))
 
-
+  if return_trajectory:
+    return np.array(observations), np.array(actions)
   return n_steps
 
 
