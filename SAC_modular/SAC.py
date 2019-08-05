@@ -173,15 +173,15 @@ class SAC_model():
     
     
    
-  def build_models(self,actor, q_func1, q_func2, value, value_targ, batch_size, obs_dim, act_dim):
+  def build_models(self,batch_size, obs_dim, act_dim):
     # run arbitrary data through the models to build them to the correct dimensions.
-    actor(tf.constant(np.zeros((batch_size,obs_dim)).astype('float32')))
-    q_func1(tf.constant(np.zeros((batch_size,obs_dim+act_dim)).astype('float32')))
-    q_func2(tf.constant(np.zeros((batch_size,obs_dim+act_dim)).astype('float32')))
-    value(tf.constant(np.zeros((batch_size,obs_dim)).astype('float32')))
-    value_targ(tf.constant(np.zeros((batch_size,obs_dim)).astype('float32')))
+    self.actor(tf.constant(np.zeros((batch_size,obs_dim)).astype('float32')))
+    self.q_func1(tf.constant(np.zeros((batch_size,obs_dim+act_dim)).astype('float32')))
+    self.q_func2(tf.constant(np.zeros((batch_size,obs_dim+act_dim)).astype('float32')))
+    self.value(tf.constant(np.zeros((batch_size,obs_dim)).astype('float32')))
+    self.value_targ(tf.constant(np.zeros((batch_size,obs_dim)).astype('float32')))
     
-    
+  
   
     
   def create_networks(self,obs_dim, act_dim, hidden_sizes = [32,32], batch_size = 100, activation = 'relu'):
@@ -205,7 +205,7 @@ class SAC_model():
     self.value_targ = mlp(hidden_sizes+[1], activation, None)
   
     #build the models by passing through arbitrary data.
-    self.build_models(self.actor, self.q_func1, self.q_func2, self.value, self.value_targ, batch_size, obs_dim, act_dim)
+    self.build_models(batch_size, obs_dim, act_dim)
     
     
     if self.load:
