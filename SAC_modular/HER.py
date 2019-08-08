@@ -1,9 +1,18 @@
 import numpy as np
 import tensorflow as tf
 import gym
+import pybullet
+import reach2D
+import pointMass #  the act of importing registers the env.
 import time
-from train import *
+from common import *
+from SAC import *
 import copy
+
+############################################################################################################
+#Her with additional support for representation learning
+############################################################################################################
+
 
 # Agree with the stable baselines guys, HER is best implemented as a wrapper on the replay buffer.
 

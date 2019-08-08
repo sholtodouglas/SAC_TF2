@@ -6,7 +6,7 @@ import pybullet
 import reach2D
 import pointMass
 from SAC import *
-from train import *
+from common import *
 from gym import wrappers
 
 

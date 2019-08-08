@@ -2,7 +2,7 @@ import gym
 import reach2D
 import numpy as np
 from SAC import *
-from train import *
+from common import *
 import pointMass
 from gym import wrappers
 

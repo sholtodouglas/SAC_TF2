@@ -5,7 +5,7 @@ import time
 import pybullet
 import reach2D
 from SAC import *
-from train import *
+from common import *
 from gym import wrappers
 # expert_obs = np.load('collected_data/expert_obs_Pendulum-v0_Hidden_32l_21000.npy')
 # expert_acts = np.load('collected_data/expert_actions_Pendulum-v0_Hidden_32l_21000.npy')

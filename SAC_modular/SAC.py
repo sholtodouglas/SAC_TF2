@@ -11,9 +11,11 @@ print(tf.__version__)
 
 import pybullet
 import reach2D
+import pointMass
 
 import tensorflow_probability as tfp
 from gym import wrappers
+from common import *
 tfd = tfp.distributions
 
 
@@ -305,6 +307,95 @@ class SAC_model():
       for name,model in self.models.items():
         model.save_weights(path+self.exp_name+'/'+name+'.h5')
       print("Model Saved at ", path+self.exp_name)
-  
 
- 
+  # This is our training loop.
+
+
+def SAC(env_fn, ac_kwargs=dict(), seed=0,
+                  steps_per_epoch=2000, epochs=100, replay_size=int(1e6), gamma=0.99,
+                  polyak=0.995, lr=1e-3, alpha=0.2, batch_size=100, start_steps=3000,
+                  max_ep_len=1000, save_freq=1, load=False, exp_name="Experiment_1", render=False):
+    tf.random.set_seed(seed)
+    np.random.seed(seed)
+    env, test_env = env_fn(), env_fn()
+
+    env = wrappers.FlattenDictWrapper(env, dict_keys=['observation', 'desired_goal'])
+    test_env = wrappers.FlattenDictWrapper(test_env, dict_keys=['observation', 'desired_goal'])
+    # Get Env dimensions
+    obs_dim = env.observation_space.shape[0]
+    act_dim = env.action_space.shape[0]
+    SAC = SAC_model(env, obs_dim, act_dim, ac_kwargs['hidden_sizes'], lr, gamma, alpha, polyak, load, exp_name)
+    # Experience buffer
+    replay_buffer = ReplayBuffer(obs_dim=obs_dim, act_dim=act_dim, size=replay_size)
+
+    # Logging
+    start_time = time.time()
+    train_log_dir = 'logs/sub/' + exp_name + ':' + str(start_time) + '/stochastic'
+    summary_writer = tf.summary.create_file_writer(train_log_dir)
+
+    def update_models(model, replay_buffer, steps, batch_size):
+        for j in range(steps):
+            batch = replay_buffer.sample_batch(batch_size)
+            LossPi, LossQ1, LossQ2, LossV, Q1Vals, Q2Vals, VVals, LogPi = model.train_step(batch)
+
+    # now collect epsiodes
+    total_steps = steps_per_epoch * epochs
+    steps_collected = 0
+
+    if not load:
+        # collect some initial random steps to initialise
+        steps_collected += rollout_trajectories(n_steps=start_steps, env=env, max_ep_len=max_ep_len, actor='random',
+                                                replay_buffer=replay_buffer, summary_writer=summary_writer,
+                                                exp_name=exp_name)
+        update_models(SAC, replay_buffer, steps=steps_collected, batch_size=batch_size)
+
+    # now act with our actor, and alternately collect data, then train.
+    while steps_collected < total_steps:
+        # collect an episode
+        steps_collected += rollout_trajectories(n_steps=max_ep_len, env=env, max_ep_len=max_ep_len,
+                                                actor=SAC.actor.get_stochastic_action, replay_buffer=replay_buffer,
+                                                summary_writer=summary_writer, current_total_steps=steps_collected,
+                                                exp_name=exp_name)
+        # take than many training steps
+        update_models(SAC, replay_buffer, steps=max_ep_len, batch_size=batch_size)
+
+        # if an epoch has elapsed, save and test.
+        if steps_collected > 0 and steps_collected % steps_per_epoch == 0:
+            SAC.save_weights()
+            # Test the performance of the deterministic version of the agent.
+            rollout_trajectories(n_steps=max_ep_len * 10, env=test_env, max_ep_len=max_ep_len,
+                                 actor=SAC.actor.get_deterministic_action, summary_writer=summary_writer,
+                                 current_total_steps=steps_collected, train=False, render=True, exp_name=exp_name)
+
+    # MODIFIABLE VARIBALES TODO PROPERLY PUT THIS IN A CLASS
+    # ENV_NAME='reacher2D-v0'
+
+
+if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--env', type=str, default='reacher2D-v0')
+    parser.add_argument('--hid', type=int, default=128)
+    parser.add_argument('--l', type=int, default=2)
+    parser.add_argument('--gamma', type=float, default=0.99)
+    parser.add_argument('--seed', '-s', type=int, default=0)
+    parser.add_argument('--epochs', type=int, default=50)
+    parser.add_argument('--max_ep_len', type=int, default=200)
+    parser.add_argument('--exp_name', type=str, default='experiment_1')
+    parser.add_argument('--load', type=bool, default=False)
+    parser.add_argument('--render', type=bool, default=False)
+    args = parser.parse_args()
+
+    experiment_name = 'no_reset_vel_' + args.env + '_Hidden_' + str(args.hid) + 'l_' + str(args.l)
+
+    SAC(lambda: gym.make(args.env),
+                  ac_kwargs=dict(hidden_sizes=[args.hid] * args.l),
+                  gamma=args.gamma, seed=args.seed, epochs=args.epochs, load=args.load, exp_name=experiment_name,
+                  max_ep_len=args.max_ep_len, render=args.render)
+
+
+
+
+
+
