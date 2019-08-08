@@ -13,6 +13,7 @@ import pybullet
 import reach2D
 
 import tensorflow_probability as tfp
+from gym import wrappers
 tfd = tfp.distributions
 
 
@@ -158,7 +159,7 @@ class ReplayBuffer:
 #@title SAC Model{ display-mode: "form" }
 class SAC_model():
   
-  def __init__(self, env, obs_dim, act_dim, hidden_sizes,lr = 0.003,gamma = None, alpha = None, polyak = None,  load = False, exp_name = 'Exp1', path = 'saved_models/'):
+  def __init__(self, env, obs_dim, act_dim, hidden_sizes,lr = 0.0001,gamma = None, alpha = None, polyak = None,  load = False, exp_name = 'Exp1', path = 'saved_models/'):
     self.env = env
     self.pi_optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
     self.value_optimizer = tf.keras.optimizers.Adam(learning_rate=lr)

@@ -7,6 +7,7 @@ import reach2D
 import pointMass
 from SAC import *
 from train import *
+from gym import wrappers
 
 
 # observations= np.load('collected_data/10000seg_reacher2D-v0_Hidden_128l_2expert_obs_.npy').astype('float32')
@@ -18,11 +19,8 @@ from train import *
 # observations= np.load('collected_data/10000no_reset_vel_pointMass-v0_Hidden_128l_2expert_obs_.npy').astype('float32')
 # actions= np.load('collected_data/10000no_reset_vel_pointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
 
-observations= np.load('collected_data/11000seg_pointMass-v0_Hidden_128l_2expert_obs_.npy').astype('float32')
-actions= np.load('collected_data/11000seg_pointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
-
-
-
+observations= np.load('collected_data/11000GAILpointMass-v0_Hidden_128l_2expert_obs_.npy').astype('float32')
+actions= np.load('collected_data/11000GAILpointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
 
 
 train_length = int(0.9*(len(observations)))
@@ -39,6 +37,8 @@ print(valid_obs.shape)
 #ENV_NAME = 'reacher2D-v0'
 ENV_NAME = 'pointMass-v0'
 env = gym.make(ENV_NAME)
+
+env = wrappers.FlattenDictWrapper(env, dict_keys=['observation', 'desired_goal'])
 act_dim = env.action_space.shape[0]
 act_limit = env.action_space.high[0]
 
@@ -50,25 +50,13 @@ optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)
 max_ep_len = 200
 
 
-
-# do like this so we can sub into our trajectory rollerouter.
-def get_action(o):
-	
-	mu,_,_ = policy(o.reshape(1,-1))
-	
-	return mu[0]
-
-
 # Behavioural clone this mf.
 @tf.function
 def train_step(obs, expert_act):
     with tf.GradientTape() as tape:
-        mu,_,_ = policy(obs)
-        
-        #print(mu.shape)
+        mu,_,_,_,_ = policy(obs)
         BC_loss = tf.reduce_sum(tf.losses.MSE(mu, expert_act))
-        #print(BC_loss)
-        
+
     BC_gradients = tape.gradient(BC_loss, policy.trainable_variables)
     optimizer.apply_gradients(zip(BC_gradients, policy.trainable_variables))
     return BC_loss
@@ -76,9 +64,7 @@ def train_step(obs, expert_act):
     
 def test_step(obs,expert_act):
   
-    mu,_,_ = policy(obs)
-
-    #print(mu.shape)
+    mu,_,_,_,_ = policy(obs)
     BC_loss = tf.reduce_sum(tf.losses.MSE(mu, expert_act))
     return BC_loss
 
@@ -97,7 +83,7 @@ for t in range(train_steps):
          tf.summary.scalar('BC_MSE_loss',BC_loss, step=t)
         
     if t % 3000 ==0:
-      rollout_trajectories(n_steps = max_ep_len,env = env, max_ep_len = max_ep_len, actor = get_action, summary_writer=train_summary_writer, current_total_steps = t,train = False, render = True, exp_name = ENV_NAME)
+      rollout_trajectories(n_steps = max_ep_len,env = env, max_ep_len = max_ep_len, actor = policy.get_deterministic_action, summary_writer=train_summary_writer, current_total_steps = t,train = False, render = True, exp_name = ENV_NAME)
       
       indexes = np.random.choice(valid_obs.shape[0], 512)
       batch_obs = valid_obs[indexes, :]

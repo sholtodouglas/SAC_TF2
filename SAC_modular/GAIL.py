@@ -6,7 +6,7 @@ import pybullet
 import reach2D
 from SAC import *
 from train import *
-
+from gym import wrappers
 # expert_obs = np.load('collected_data/expert_obs_Pendulum-v0_Hidden_32l_21000.npy')
 # expert_acts = np.load('collected_data/expert_actions_Pendulum-v0_Hidden_32l_21000.npy')
 
@@ -108,7 +108,7 @@ def discriminator_train_step(batch, expert_batch,  discriminator, discriminator_
         agent_loss = -(tf.math.log(1-agent_probs+1e-8))
         # and thus, the reward our SAC agent gets will be -(tf.math.log(1-agent_probs)), it is trying to maximise this, 
         # discriminator is trying to mimise it.
-        loss = tf.reduce_sum(expert_loss + agent_loss)
+        loss = tf.reduce_sum(expert_loss) + tf.reduce_sum(agent_loss)
         expert_accuracy = tf.reduce_mean(tf.cast(expert_probs > 0.5, tf.float32))
         agent_accuracy  = tf.reduce_mean(tf.cast(agent_probs < 0.5, tf.float32))
         
@@ -157,7 +157,7 @@ def pretrain_BC(model, BC_optimizer, batch_size):
 
 
 
-def training_loop(env_fn,  ac_kwargs=dict(), seed=0, 
+def GAIL(env_fn,  ac_kwargs=dict(), seed=0, 
         steps_per_epoch=5000, epochs=100, replay_size=int(1e6), gamma=0.99, 
         polyak=0.995, lr=1e-3, alpha=0.2, batch_size=100, start_steps=5000, 
         max_ep_len=1000, save_freq=1, load = False, exp_name = "Experiment_1", render = False, discrim_req_acc = 0.7, BC = False):
@@ -165,6 +165,8 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
     tf.random.set_seed(seed)
     np.random.seed(seed)
     env, test_env = env_fn(), env_fn()
+    env = wrappers.FlattenDictWrapper(env, dict_keys=['observation', 'desired_goal'])
+    test_env  = wrappers.FlattenDictWrapper(test_env , dict_keys=['observation', 'desired_goal'])
     # Get Env dimensions
     obs_dim = env.observation_space.shape[0]
     act_dim = env.action_space.shape[0]
@@ -262,7 +264,7 @@ if __name__ == '__main__':
 
     experiment_name = 'GAIL'+args.env+'_Hidden_'+str(args.hid)+'l_'+str(args.l)
 
-    training_loop(lambda : gym.make(args.env), 
+    GAIL(lambda : gym.make(args.env), 
       ac_kwargs=dict(hidden_sizes=[args.hid]*args.l),
       gamma=args.gamma, seed=args.seed, epochs=args.epochs, load = args.load, exp_name = experiment_name, max_ep_len = args.max_ep_len, render = args.render, discrim_req_acc = args.discrim_req_acc, BC = args.BC)
 
