@@ -122,7 +122,7 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
         o = o2
         # if either we've ended an episdoe, collected all the steps or have reached max ep len and
         # thus need to log ep reward and reset
-        if d or (ep_len == max_ep_len) or (t == (n_steps - 1)):
+        if d or (ep_len == int(max_ep_len)) or (t == (int(n_steps) - 1)):
             if return_episode:
                 episode_buffer.append(episode)
                 episode = []
@@ -145,22 +145,28 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
 
 
 # used in expert collection, and with conversion of episodes to HER
-def episode_to_trajectory(episode, include_goal=False, flattened=False):
-    # episode arrives as a list of o, a, r, o2, d
-    # trajectory is two lists, one of o s, one of a s.
-    observations = []
-    actions = []
-    for transition in episode:
-        o, a, r, o2, d = transition
-        if flattened:
-            observations.append(o)
-        else:
-            if include_goal:
-                observations.append(np.concatenate(o['observation'], o['desired_goal']))
-            else:
-                observations.append(o['observation'])
-        actions.append(a)
+# used in expert collection, and with conversion of episodes to HER
+def episode_to_trajectory(episode, include_goal = False, flattened = False, representation_learning = False):
+  # episode arrives as a list of o, a, r, o2, d
+  # trajectory is two lists, one of o s, one of a s.
+  observations = []
+  actions = []
+  for transition in episode:
+    if representation_learning:
+      o, a, r, o2, d, z = transition
+    else:
+      o, a, r, o2, d = transition
 
-    return np.array(observations), np.array(actions)
+    if flattened:
+      observations.append(o)
+    else:
+      if include_goal:
+        observations.append(np.concatenate(o['observation'], o['desired_goal']))
+      else:
+        observations.append(o['observation'])
+
+    actions.append(a)
+
+  return np.array(observations), np.array(actions)
 
 

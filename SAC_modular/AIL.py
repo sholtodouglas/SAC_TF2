@@ -4,7 +4,7 @@ import time
 import datetime
 from tqdm import tqdm
 from tensorflow.keras.layers import Dense, Flatten, Conv2D,Bidirectional, LSTM, Dropout
-from tensorflow.compat.v1.keras.layers import CuDNNLSTM
+
 from tensorflow.keras import Model
 from tensorflow.keras.models import  Sequential
 from tqdm import tqdm, tqdm_notebook
@@ -21,13 +21,10 @@ print(tf.__version__)
 
 import pybullet
 import reach2D
-import matplotlib.pyplot as plt
-import seaborn as sns
-import matplotlib.patheffects as PathEffects
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
-import umap
-import pandas as pd
+import pointMass
+from common import *
+import copy
+from SAC import *
 import traceback
 
 # All magic numbers here
@@ -45,12 +42,10 @@ BETA = 0.05
 OBS_GOAL_INDEX = 4  # index from which the goal is in the obs vector
 ACHEIVED_GOAL_INDEX = 2  # point up to which we care about the goal
 EPOCHS = 1000
-extension = '/Z_learning_B005'
+extension = 'saved_models/Z_learning_B005'
 
-# @title Dataset
-observations = np.load('collected_data/10000GAILpointMass-v0_Hidden_128l_2expert_obs_.npy').astype(
-    'float32')[:, 0:OBS_GOAL_INDEX]  # Don't include the goal in the obs
-actions = np.load('collected_data/10000GAILpointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
+observations = np.load('collected_data/10000HER_pointMass-v0_Hidden_128l_2expert_obs_.npy').astype('float32')[:, 0:OBS_GOAL_INDEX]  # Don't include the goal in the obs
+actions = np.load('collected_data/10000HER_pointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
 OBS_DIM = observations.shape[1]
 ACT_DIM = actions.shape[1]
 train_len = int(len(observations) * train_test_split)
@@ -109,11 +104,12 @@ class TRAJECTORY_ENCODER_LSTM(Model):
     def __init__(self, LAYER_SIZE, LATENT_DIM, P_DROPOUT):
         super(TRAJECTORY_ENCODER_LSTM, self).__init__()
 
-        self.bi_lstm = Bidirectional(CuDNNLSTM(LAYER_SIZE, return_sequences=True), merge_mode=None)
+        self.bi_lstm = Bidirectional(LSTM(LAYER_SIZE, return_sequences=True, activation ='tanh',recurrent_activation ='sigmoid', recurrent_dropout = 0, use_bias = True), merge_mode=None)
         self.mu = Dense(LATENT_DIM)
         self.scale = Dense(LATENT_DIM, activation='softplus')
         self.dropout1 = tf.keras.layers.Dropout(P_DROPOUT)
 
+                                                
     def call(self, obs, acts, training=False):
         x = tf.concat([obs, acts], axis=2)  # concat observations and actions together.
         x = self.bi_lstm(x)
@@ -212,6 +208,61 @@ class ACTOR(Model):
         return pi[0]
 
 
+# @title Training and Test Step
+# Ok recall that the gist of the loop is, get a bunch of trajectories, take the first as s_i, the last as s_g. Encode full trajectory as z.
+
+# Training Step
+
+# @tf.function
+def train_step(obs, acts, BETA, mask, lengths):
+    with tf.GradientTape() as tape:
+        # obs and acts are a trajectory, so get intial and goal
+        s_i = obs[:, 0, :]
+
+        range_lens = tf.expand_dims(tf.range(tf.shape(lengths)[0]), 1)
+        expanded_lengths = tf.expand_dims(lengths - 1, 1)  # lengths must be subtracted by 1 to become indices.
+
+        s_g = tf.gather_nd(obs,tf.concat((range_lens, expanded_lengths), 1))  # get the actual last element of the sequencs.
+        s_g = s_g[:, :ACHEIVED_GOAL_INDEX]
+        # Encode the trajectory
+        mu_enc, s_enc = encoder(obs, acts, training=True)
+        encoder_normal = tfd.Normal(mu_enc, s_enc)
+        z = encoder_normal.sample()
+
+        lengths = tf.cast(lengths, tf.float32)
+        loss, IMI, info_kl = compute_loss(encoder_normal, z, obs, acts, s_g, BETA, mu_enc, s_enc, mask, lengths,
+                                          training=True)
+
+        # find and apply gradients with total loss
+    actor_vars = [v for v in actor.trainable_variables if 'log_std' not in v.name]
+    gradients = tape.gradient(loss, encoder.trainable_variables + actor_vars)
+    optimizer.apply_gradients(zip(gradients, encoder.trainable_variables + actor_vars))
+
+    # return values for diagnostics
+    return IMI, info_kl
+
+
+def test_step(obs, acts, mask, lengths):
+    # obs and acts are a trajectory, so get intial and goal
+    s_i = obs[:, 0, :]
+    range_lens = tf.expand_dims(tf.range(tf.shape(lengths)[0]), 1)
+    expanded_lengths = tf.expand_dims(lengths - 1, 1)  # lengths must be subtracted by 1 to become indices.
+    s_g = tf.gather_nd(obs,
+                       tf.concat((range_lens, expanded_lengths), 1))  # get the actual last element of the sequencs.
+    s_g = s_g[:, :ACHEIVED_GOAL_INDEX]
+
+    # Encode the trajectory
+    mu_enc, s_enc = encoder(obs, acts, training=True)
+    encoder_normal = tfd.Normal(mu_enc, s_enc)
+    z = encoder_normal.sample()
+    lengths = tf.cast(lengths, tf.float32)
+    loss, IMI, info_kl = compute_loss(encoder_normal, z, obs, acts, s_g, BETA, mu_enc, s_enc, mask, lengths,
+                                      training=True)
+
+    # return values for diagnostics
+    return IMI, info_kl
+
+
 # @title Loss Computation and Model Save/Load
 def compute_loss(normal_enc, z, obs, acts, s_g, BETA, mu_enc, s_enc, mask, lengths, training=False):
     AVG_SEQ_LEN = obs.shape[1]
@@ -265,7 +316,314 @@ def load_weights(extension):
     actor.load_weights(extension + '/actor.h5')
     print('Weights loaded.')
 
+class LatentHERReplayBuffer:
+    """
+    A simple FIFO experience replay buffer for SAC agents.
+    """
+
+    def __init__(self, env, obs_dim, act_dim, size, n_sampled_goal = 4, goal_selection_strategy = 'future', goal_dist = 0.5, z_dist = 2):
+        self.obs1_buf = np.zeros([size, obs_dim], dtype=np.float32)
+        self.obs2_buf = np.zeros([size, obs_dim], dtype=np.float32)
+        self.acts_buf = np.zeros([size, act_dim], dtype=np.float32)
+        self.rews_buf = np.zeros(size, dtype=np.float32)
+        self.done_buf = np.zeros(size, dtype=np.float32)
+        self.n_sampled_goal = n_sampled_goal
+        self.env = env
+        self.goal_selection_strategy = goal_selection_strategy
+        self.goal_dist = goal_dist
+        self.z_dist = z_dist
+        self.ptr, self.size, self.max_size = 0, 0, size
+
+    def store(self, obs, act, rew, next_obs, done):
+        self.obs1_buf[self.ptr] = obs
+        self.obs2_buf[self.ptr] = next_obs
+        self.acts_buf[self.ptr] = act
+        self.rews_buf[self.ptr] = rew
+        self.done_buf[self.ptr] = done
+        self.ptr = (self.ptr+1) % self.max_size
+        self.size = min(self.size+1, self.max_size)
+
+    def sample_batch(self, batch_size=32):
+        idxs = np.random.randint(0, self.size, size=batch_size)
+        return dict(obs1=self.obs1_buf[idxs],
+                    obs2=self.obs2_buf[idxs],
+                    acts=self.acts_buf[idxs],
+                    rews=self.rews_buf[idxs],
+                    done=self.done_buf[idxs])
+
+    def compute_latent_reward(self, achieved_goal, desired_goal, achieved_z, desired_z):
+        distance = np.sum(abs(achieved_goal-desired_goal))
+        z_dist = np.sum(abs(achieved_z - desired_z))
+
+        r = 0
+        if distance <= self.goal_dist and z_dist <= self.z_dist:
+            r = 1
+        return r
+
+
+        # could be a goal, or both goal and z!
+    def sample_achieved(self, transitions, transition_idx, strategy = 'future', encoder = None):
+        if strategy == 'future':
+            selected_idx = np.random.choice(np.arange(transition_idx + 1, len(transitions)))
+            selected_transition = transitions[selected_idx]
+
+
+        elif strategy == 'final':
+            selected_transition = transitions[-1]
+
+        goal = selected_transition[0]['achieved_goal']
+        # here is where we get the obs and acts for the sequence up till there.
+        if encoder != None:
+        # and here is where we will encode it, and get a nice z.
+            sub_sequence = transitions[0:selected_idx + 1]  # up to and including selected index
+            seq_obs, seq_acts = episode_to_trajectory(sub_sequence, representation_learning=True)
+            # encoding of the path up until that goal.
+            z = tf.squeeze(encoder(np.expand_dims(seq_obs[::FRAME_SKIP, :], axis=0),
+                                   np.expand_dims(seq_acts[::FRAME_SKIP, :], axis=0)))
+
+            return (goal, z)
+        return goal
+
+
+    # pass in an encoder if we desired reencoding of our representation learning trajectories.
+    def store_hindsight_episode(self, episode, encoder = None):
+
+        # get the z we were meant to follow.
+        if encoder != None: 
+            _,_,_,_,_,desired_z = episode[0]
+
+            # now find the z we actually followed
+            seq_obs, seq_acts = episode_to_trajectory(episode, representation_learning=True)
+            achieved_z = tf.squeeze(encoder(np.expand_dims(seq_obs[::FRAME_SKIP, :], axis=0),
+                                   np.expand_dims(seq_acts[::FRAME_SKIP, :], axis=0)))
+
+        for transition_idx, transition in enumerate(episode):
+            
+            if encoder != None:
+                o, a, _, o2, d, _ = transition
+                o  = np.concatenate([o['observation'], desired_z, o['desired_goal']])
+                o2 = np.concatenate([o2['observation'], desired_z, o2['desired_goal']])
+                # r from the environment won't be accurate, we need to recompute as sparse
+                # not only in terms of the goal, but also the latent vector.
+                r = compute_latent_reward(self, o['achieved_goal'], o['desired_goal'], achieved_z, desired_z)
+            else:
+                o, a, r, o2, d = transition
+                o = np.concatenate([o['observation'], o['desired_goal']])
+                o2 = np.concatenate([o2['observation'], o2['desired_goal']])
+
+
+            self.store(o, a, r, o2, d)
+
+            if transition_idx == len(episode)-1:
+                selection_strategy = 'final'
+            else:
+                selection_strategy = self.goal_selection_strategy
+
+            sampled_achieved_goals = [self.sample_achieved(episode, transition_idx, selection_strategy) for _ in range(self.n_sampled_goal)]
+
+            # hindsight sub in both the goal and z. So compute the achieved goal and intended z up till that goal.
+            for sample in sampled_achieved_goals:
+                
+                if encoder != None:
+                    o, a, r, o2, d, _ = copy.deepcopy(transition)
+                    (goal,z) = sample
+                else:
+                    o, a, r, o2, d = copy.deepcopy(transition)
+                    goal = sample
+
+                o['desired_goal'] = goal
+                o2['desired_goal'] = goal
+
+                # with our method here, our reward is based off following z and acheiving the goal.
+                
+                if encoder != None:
+                    o = np.concatenate([o['observation'], z, o['desired_goal']])
+                    o2 = np.concatenate([o2['observation'], z, o2['desired_goal']])
+                    r = compute_latent_reward(self, goal, o2['desired_goal'], z, z)
+                else:
+                    r = self.env.compute_reward(goal, o2['desired_goal'], info = None)
+                    o = np.concatenate([o['observation'], o['desired_goal']])
+                    o2 = np.concatenate([o2['observation'], o2['desired_goal']])
+
+
+                self.store(o, a, r, o2, d)
+
+
+def sample_expert_trajectory(train_set, encoder):
+
+    obs, acts, mask, lengths = train_set.next()
+    s_i = obs[:, 0, :]
+    range_lens = tf.expand_dims(tf.range(tf.shape(lengths)[0]), 1)
+    expanded_lengths = tf.expand_dims(lengths - 1, 1)  # lengths must be subtracted by 1 to become indices.
+
+    s_g = tf.gather_nd(obs,
+                       tf.concat((range_lens, expanded_lengths), 1))  # get the actual last element of the sequencs.
+    s_g = s_g[:, :ACHEIVED_GOAL_INDEX]
+    # Encode the trajectory
+    mu_enc, s_enc = encoder(obs, acts, training=True)
+    encoder_normal = tfd.Normal(mu_enc, s_enc)
+    z = encoder_normal.sample()
+    return s_i, z, s_g, obs, acts, mu_enc, lengths
+
+
+def log_metrics(summary_writer, current_total_steps, episodes, obs, acts, z, encoder, length, train = True):
+  rollout_obs, rollout_acts = episode_to_trajectory(episodes[0], representation_learning = False)     #TODO make this true
+  print(rollout_obs.shape, rollout_acts.shape)
+  print(rollout_obs.dtype, rollout_acts.dtype)
+  rollout_mu_z, rollout_s_z = encoder(np.expand_dims(rollout_obs[::FRAME_SKIP,:],axis= 0), np.expand_dims(rollout_acts[::FRAME_SKIP,:], axis = 0))
+  
+  z_dist = np.sum(abs(z - np.squeeze(rollout_mu_z)))
+  euclidean_dist = np.sum(abs(rollout_obs[:,:2] - np.squeeze(obs, axis=0)[:length,:2]))
+  with summary_writer.as_default():
+      current_total_steps = int(current_total_steps)
+      if train:
+          print('Frame: ', current_total_steps, ' Z_distance: ', z_dist, ' Euclidean Distance: ', euclidean_dist)
+          tf.summary.scalar('Z_distance', int(z_dist), step=current_total_steps)
+          tf.summary.scalar('Euclidean Distance', euclidean_dist, step=current_total_steps)
+      else:
+          print('Test Frame: ', current_total_steps, ' Z_distance: ', z_dist, ' Euclidean Distance: ', euclidean_dist)
+          tf.summary.scalar('Test Z_distance', z_dist, step=current_total_steps)
+          tf.summary.scalar('Test Euclidean Distance', euclidean_dist, step=current_total_steps)
+
 encoder = TRAJECTORY_ENCODER_LSTM(LAYER_SIZE, LATENT_DIM, P_DROPOUT)
 actor = ACTOR(LAYER_SIZE, ACT_DIM, P_DROPOUT)
-optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)
 load_weights(extension)
+#
+# This is our training loop.
+def training_loop(env_fn, ac_kwargs=dict(), seed=0,
+                  steps_per_epoch=2000, epochs=100, replay_size=int(1e6), gamma=0.99,
+                  polyak=0.995, lr=1e-3, alpha=0.2, batch_size=100, start_steps=3000,
+                  max_ep_len=1000, save_freq=1, load=False, exp_name="Experiment_1", render=False, strategy='future'):
+    tf.random.set_seed(seed)
+    np.random.seed(seed)
+    env, test_env = env_fn(), env_fn()
+
+    env.set_sparse_reward()
+    # Get Env dimensions
+    in_dim = env.observation_space.spaces['observation'].shape[0] + env.observation_space.spaces['desired_goal'].shape[0]
+    act_dim = env.action_space.shape[0]
+    SAC = SAC_model(env, in_dim, act_dim, ac_kwargs['hidden_sizes'], lr, gamma, alpha, polyak, load, exp_name)
+
+    # update the actor to our boi's weights.
+    SAC.actor = ACTOR(LAYER_SIZE, act_dim, P_DROPOUT)
+    SAC.build_models(BATCH_SIZE, in_dim, act_dim)
+    #assign_variables(actor, SAC.actor)
+    SAC.models['actor'] = SAC.actor
+
+    # Experience buffer
+    replay_buffer = LatentHERReplayBuffer(env, in_dim, act_dim, replay_size, n_sampled_goal=4,
+                                    goal_selection_strategy=strategy)
+
+    # Logging
+
+    start_time = time.time()
+    train_log_dir = 'logs/sub/' + exp_name + ':' + str(start_time) + '/stochastic'
+    summary_writer = tf.summary.create_file_writer(train_log_dir)
+
+    def update_models(model, replay_buffer, steps, batch_size):
+        for j in range(steps):
+            batch = replay_buffer.sample_batch(batch_size)
+            LossPi, LossQ1, LossQ2, LossV, Q1Vals, Q2Vals, VVals, LogPi = model.train_step(batch)
+
+    # now collect epsiodes
+    total_steps = steps_per_epoch * epochs
+    steps_collected = 0
+
+
+    sample_size = 20
+    train_set = iter(dataset.shuffle(valid_len).batch(sample_size).repeat(EPOCHS))
+    # sample a bunch of expert trajectories to try to imitate
+    s_i, z, s_g, obs, acts, _, lengths = sample_expert_trajectory(train_set, encoder)
+    for r in range(sample_size):
+        episodes, steps = rollout_trajectories(n_steps=lengths[r], env=env, max_ep_len=lengths[r], actor=SAC.actor.get_deterministic_action,
+                                               start_state=s_i[r], s_g = s_g[r], exp_name=exp_name, return_episode=True,
+                                               goal_based=True, current_total_steps=steps_collected)
+        steps_collected += steps
+        [replay_buffer.store_hindsight_episode(episode) for episode in episodes]
+        log_metrics(summary_writer, steps_collected, episodes, obs[r], acts[r], z[r], encoder,lengths[r], train = True)
+
+    # now update after
+    update_models(SAC, replay_buffer, steps=steps_collected, batch_size=batch_size)
+
+    # now act with our actor, and alternately collect data, then train.
+    train_set = iter(dataset.shuffle(valid_len).batch(1).repeat(EPOCHS))
+
+    while steps_collected < total_steps:
+        # collect an episode
+        s_i, z, s_g, obs, acts, _, lengths = sample_expert_trajectory(train_set, encoder)
+        episodes, steps = rollout_trajectories(n_steps=lengths[0], env=env, max_ep_len=lengths[0],
+                                               actor=SAC.actor.get_deterministic_action, start_state = s_i[0], s_g= s_g[0],
+                                               current_total_steps=steps_collected, exp_name=exp_name,
+                                               return_episode=True, goal_based=True)
+        steps_collected += steps
+        # take than many training steps
+        [replay_buffer.store_hindsight_episode(episode) for episode in episodes]
+        update_models(SAC, replay_buffer, steps=max_ep_len, batch_size=batch_size)
+        log_metrics(summary_writer, steps_collected, episodes, obs[0], acts[0], z[0], encoder, lengths[0])
+        # we also want to compute z distance and euclidean distance of trajectories, and summary record them here.
+
+        # if an epoch has elapsed, save and test.
+        
+        if steps_collected > 0 and steps_collected % steps_per_epoch == 0:
+            SAC.save_weights()
+            # Test the performance of the deterministic version of the agent.
+            for i in range(0,10):
+                s_i, _, s_g, obs, acts, mu_z, lengths = sample_expert_trajectory(train_set, encoder)
+                episodes, steps = rollout_trajectories(n_steps=lengths[0], env=test_env, max_ep_len=lengths[0],
+                                                       actor=SAC.actor.get_deterministic_action,start_state = s_i[0], s_g=s_g[0],
+                                                       current_total_steps=steps_collected, exp_name=exp_name,
+                                                       return_episode=True, goal_based=True, train = False, render = True)
+                log_metrics(summary_writer, steps_collected, episodes, obs[0], acts[0], mu_z[0], encoder, lengths[0], train = False)
+            # we also want to compute z distance and euclidean distance of trajectories, and summary record them here.
+
+            ## Z distance, euclidean distance?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            # TODO Pray?
+
+if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--env', type=str, default='pointMass-v0')
+    parser.add_argument('--hid', type=int, default=128)
+    parser.add_argument('--l', type=int, default=2)
+    parser.add_argument('--gamma', type=float, default=0.99)
+    parser.add_argument('--seed', '-s', type=int, default=0)
+    parser.add_argument('--epochs', type=int, default=50)
+    parser.add_argument('--max_ep_len', type=int, default=200)
+    parser.add_argument('--exp_name', type=str, default='experiment_1')
+    parser.add_argument('--load', type=bool, default=False)
+    parser.add_argument('--render', type=bool, default=False)
+    parser.add_argument('--strategy', type=str, default='future')
+
+    args = parser.parse_args()
+
+    experiment_name = 'HER_' + args.env + '_Hidden_' + str(args.hid) + 'l_' + str(args.l)
+
+    training_loop(lambda: gym.make(args.env),
+                  ac_kwargs=dict(hidden_sizes=[args.hid] * args.l),
+                  gamma=args.gamma, seed=args.seed, epochs=args.epochs, load=args.load, exp_name=experiment_name,
+                  max_ep_len=args.max_ep_len, render=args.render, strategy=args.strategy)
+
+
+
+

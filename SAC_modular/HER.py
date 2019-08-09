@@ -59,7 +59,7 @@ class HERReplayBuffer:
                     done=self.done_buf[idxs])
 
         # could be a goal, or both goal and z!
-    def sample_achieved(self, transitions, transition_idx, strategy = 'future'):
+    def sample_achieved(self, transitions, transition_idx, strategy = 'future', encoder = None):
         if strategy == 'future':
             selected_idx = np.random.choice(np.arange(transition_idx + 1, len(transitions)))
             selected_transition = transitions[selected_idx]
@@ -117,7 +117,7 @@ class HERReplayBuffer:
                 o['desired_goal'] = goal
                 o2['desired_goal'] = goal
 
-                r = self.env.compute_reward(goal, o2['desired_goal']) #i.e 1 for the most part
+                r = self.env.compute_reward(goal, o2['desired_goal'], info = None) #i.e 1 for the most part
 
 
                 if encoder != None:
@@ -146,7 +146,10 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
   tf.random.set_seed(seed)
   np.random.seed(seed)
   env, test_env = env_fn(), env_fn()
-  env.set_sparse_reward()
+  try:
+    env.set_sparse_reward()
+  except:
+      print('Env already uses sparse rewards.')
 
   # Get Env dimensions
   obs_dim = env.observation_space.spaces['observation'].shape[0] + env.observation_space.spaces['desired_goal'].shape[0]
