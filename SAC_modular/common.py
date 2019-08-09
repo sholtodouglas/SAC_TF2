@@ -137,6 +137,11 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
             # reset the env if there are still steps to collect
             if t < n_steps - 1:
                 o, r, d, ep_ret, ep_len = env.reset(), 0, False, 0, 0
+                if start_state != None:
+                    o = set_init(o, env)
+                if s_g != None:
+                    env.reset_goal_pos(s_g)
+
 
             # else it will be the end of the loop and of the function.
     if return_episode:

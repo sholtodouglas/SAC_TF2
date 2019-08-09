@@ -30,10 +30,9 @@ import traceback
 # All magic numbers here
 #@title Definitions
 train_test_split = 0.9
-MAX_SEQ_LEN = 30
+MAX_SEQ_LEN = 60
 MIN_SEQ_LEN = 16
 # TODO Consider if this could mess us up if we have an LSTM based actor?
-FRAME_SKIP = 2 #frame interval to decimate sequences at. cant frame skip if we want to do determin
 BATCH_SIZE = 256
 LAYER_SIZE = 128
 LATENT_DIM = 12
@@ -53,44 +52,51 @@ train_obs_subset = observations[:train_len, :]
 train_acts_subset = actions[:train_len, :]
 valid_obs_subset = observations[train_len:, :]
 valid_acts_subset = actions[train_len:, :]
-train_len = len(train_obs_subset) - MAX_SEQ_LEN * FRAME_SKIP
-valid_len = len(valid_obs_subset) - MAX_SEQ_LEN * FRAME_SKIP
+train_len = len(train_obs_subset) - MAX_SEQ_LEN
+valid_len = len(valid_obs_subset) - MAX_SEQ_LEN
 
 
-def data_generator(actions, subset):
-    if subset == b'Train':
-        set_len = train_len
-        obs_set = train_obs_subset
-        act_set = train_acts_subset
-    if subset == b'Valid':
-        set_len = valid_len
-        obs_set = valid_obs_subset
-        act_set = valid_acts_subset
 
-    for idx in range(0, set_len):
-        # yield the observation randomly between min and max sequence length.
-        length = np.random.randint(MIN_SEQ_LEN * FRAME_SKIP, (MAX_SEQ_LEN * FRAME_SKIP))
 
-        if length % 2 != 0:
+def data_generator(actions,subset):
+
+      if subset == b'Train':
+            set_len = train_len
+            obs_set = train_obs_subset
+            act_set = train_acts_subset
+      if subset == b'Valid':
+            set_len = valid_len
+            obs_set = valid_obs_subset
+            act_set = valid_acts_subset
+
+      for idx in range(0, set_len):
+          # yield the observation randomly between min and max sequence length.
+          length = np.random.randint(MIN_SEQ_LEN, (MAX_SEQ_LEN))
+
+          if length % 2 != 0:
             length -= 1
 
-        obs_padding = np.zeros((MAX_SEQ_LEN - length // FRAME_SKIP, OBS_DIM))
 
-        padded_obs = np.concatenate((obs_set[idx:idx + length:FRAME_SKIP], obs_padding), axis=0)
+          obs_padding = np.zeros((MAX_SEQ_LEN-length, OBS_DIM))
 
-        act_padding = np.zeros((MAX_SEQ_LEN - length // FRAME_SKIP, ACT_DIM))
-        padded_act = np.concatenate((act_set[idx:idx + length:FRAME_SKIP], act_padding), axis=0)
 
-        # ones to length of actions, zeros for the rest to mask out loss.
-        mask = np.concatenate((np.ones((length // FRAME_SKIP, ACT_DIM)), act_padding), axis=0)
 
-        if len(padded_obs) != MAX_SEQ_LEN:
+          padded_obs = np.concatenate((obs_set[idx:idx+length], obs_padding), axis = 0)
+
+          act_padding = np.zeros((MAX_SEQ_LEN-length, ACT_DIM))
+          padded_act = np.concatenate((act_set[idx:idx+length], act_padding), axis = 0)
+
+          # ones to length of actions, zeros for the rest to mask out loss.
+          mask = np.concatenate((np.ones((length, ACT_DIM)),act_padding), axis = 0 )
+
+          if len(padded_obs) != MAX_SEQ_LEN:
             print(idx, length, len(padded_obs))
 
-        if len(padded_act) != MAX_SEQ_LEN:
+          if len(padded_act) != MAX_SEQ_LEN:
             print(idx, length, len(padded_act))
 
-        yield (padded_obs, padded_act, mask, length // FRAME_SKIP)
+
+          yield (padded_obs, padded_act, mask, length)
 
 
 dataset = tf.data.Dataset.from_generator(data_generator, (tf.float32, tf.float32, tf.float32, tf.int32),
@@ -108,10 +114,12 @@ class TRAJECTORY_ENCODER_LSTM(Model):
         self.mu = Dense(LATENT_DIM)
         self.scale = Dense(LATENT_DIM, activation='softplus')
         self.dropout1 = tf.keras.layers.Dropout(P_DROPOUT)
+        self.frame_skip = 2
 
                                                 
     def call(self, obs, acts, training=False):
         x = tf.concat([obs, acts], axis=2)  # concat observations and actions together.
+        x = x[:,::self.frame_skip,:]
         x = self.bi_lstm(x)
         x = self.dropout1(x, training=training)
         bottom = x[0][:, -1, :]  # Take the last element of the bottom row
@@ -375,37 +383,39 @@ class LatentHERReplayBuffer:
         # here is where we get the obs and acts for the sequence up till there.
         if encoder != None:
         # and here is where we will encode it, and get a nice z.
-            sub_sequence = transitions[0:selected_idx + 1]  # up to and including selected index
+            sub_sequence = transitions[0:transition_idx + 1]  # up to and including selected index
             seq_obs, seq_acts = episode_to_trajectory(sub_sequence, representation_learning=True)
             # encoding of the path up until that goal.
-            z = tf.squeeze(encoder(np.expand_dims(seq_obs[::FRAME_SKIP, :], axis=0),
-                                   np.expand_dims(seq_acts[::FRAME_SKIP, :], axis=0)))
+            mu_z, s_z = encoder(np.expand_dims(seq_obs, axis=0),
+                                   np.expand_dims(seq_acts, axis=0))
+            mu_z = tf.squeeze(mu_z)
 
-            return (goal, z)
+            return (goal, mu_z)
         return goal
 
 
     # pass in an encoder if we desired reencoding of our representation learning trajectories.
-    def store_hindsight_episode(self, episode, encoder = None):
+    def store_hindsight_episode(self, episode, latent = True, encoder = None):
 
         # get the z we were meant to follow.
-        if encoder != None: 
-            _,_,_,_,_,desired_z = episode[0]
-
+        if encoder:
             # now find the z we actually followed
             seq_obs, seq_acts = episode_to_trajectory(episode, representation_learning=True)
-            achieved_z = tf.squeeze(encoder(np.expand_dims(seq_obs[::FRAME_SKIP, :], axis=0),
-                                   np.expand_dims(seq_acts[::FRAME_SKIP, :], axis=0)))
+            achieved_z = tf.squeeze(encoder(np.expand_dims(seq_obs, axis=0),
+                                   np.expand_dims(seq_acts, axis=0)))
 
         for transition_idx, transition in enumerate(episode):
             
-            if encoder != None:
-                o, a, _, o2, d, _ = transition
+            if latent:
+                o, a, r, o2, d, desired_z = transition
+                #TODO
+                if encoder:
+                    r = self.compute_latent_reward(o['achieved_goal'], o['desired_goal'], achieved_z, desired_z)
+
                 o  = np.concatenate([o['observation'], desired_z, o['desired_goal']])
                 o2 = np.concatenate([o2['observation'], desired_z, o2['desired_goal']])
                 # r from the environment won't be accurate, we need to recompute as sparse
                 # not only in terms of the goal, but also the latent vector.
-                r = compute_latent_reward(self, o['achieved_goal'], o['desired_goal'], achieved_z, desired_z)
             else:
                 o, a, r, o2, d = transition
                 o = np.concatenate([o['observation'], o['desired_goal']])
@@ -419,29 +429,33 @@ class LatentHERReplayBuffer:
             else:
                 selection_strategy = self.goal_selection_strategy
 
-            sampled_achieved_goals = [self.sample_achieved(episode, transition_idx, selection_strategy) for _ in range(self.n_sampled_goal)]
+            #TODO pass encoder here for z learning
+            sampled_achieved_goals = [self.sample_achieved(episode, transition_idx, selection_strategy,encoder) for _ in range(self.n_sampled_goal)]
 
             # hindsight sub in both the goal and z. So compute the achieved goal and intended z up till that goal.
             for sample in sampled_achieved_goals:
                 
-                if encoder != None:
-                    o, a, r, o2, d, _ = copy.deepcopy(transition)
-                    (goal,z) = sample
+                if latent:
+                    o, a, r, o2, d, z = copy.deepcopy(transition)
+
                 else:
                     o, a, r, o2, d = copy.deepcopy(transition)
+
+                if encoder:
+                    (goal,z) = sample
+                    r = self.compute_latent_reward(goal, goal, z, z)
+                else:
                     goal = sample
+                    r = self.env.compute_reward(goal, goal, info = None)
+
 
                 o['desired_goal'] = goal
                 o2['desired_goal'] = goal
 
-                # with our method here, our reward is based off following z and acheiving the goal.
-                
-                if encoder != None:
+                if latent:
                     o = np.concatenate([o['observation'], z, o['desired_goal']])
                     o2 = np.concatenate([o2['observation'], z, o2['desired_goal']])
-                    r = compute_latent_reward(self, goal, o2['desired_goal'], z, z)
                 else:
-                    r = self.env.compute_reward(goal, o2['desired_goal'], info = None)
                     o = np.concatenate([o['observation'], o['desired_goal']])
                     o2 = np.concatenate([o2['observation'], o2['desired_goal']])
 
@@ -460,29 +474,29 @@ def sample_expert_trajectory(train_set, encoder):
                        tf.concat((range_lens, expanded_lengths), 1))  # get the actual last element of the sequencs.
     s_g = s_g[:, :ACHEIVED_GOAL_INDEX]
     # Encode the trajectory
+    # TODO fix this
     mu_enc, s_enc = encoder(obs, acts, training=True)
     encoder_normal = tfd.Normal(mu_enc, s_enc)
     z = encoder_normal.sample()
+
     return s_i, z, s_g, obs, acts, mu_enc, lengths
 
 
-def log_metrics(summary_writer, current_total_steps, episodes, obs, acts, z, encoder, length, train = True):
-  rollout_obs, rollout_acts = episode_to_trajectory(episodes[0], representation_learning = False)     #TODO make this true
-  print(rollout_obs.shape, rollout_acts.shape)
-  print(rollout_obs.dtype, rollout_acts.dtype)
-  rollout_mu_z, rollout_s_z = encoder(np.expand_dims(rollout_obs[::FRAME_SKIP,:],axis= 0), np.expand_dims(rollout_acts[::FRAME_SKIP,:], axis = 0))
-  
-  z_dist = np.sum(abs(z - np.squeeze(rollout_mu_z)))
-  euclidean_dist = np.sum(abs(rollout_obs[:,:2] - np.squeeze(obs, axis=0)[:length,:2]))
+def log_metrics(summary_writer, current_total_steps, episodes, obs, acts, z, length,encoder = None, train = True):
+  rollout_obs, rollout_acts = episode_to_trajectory(episodes[0], representation_learning = True)     #TODO make this true for z learning
+  if encoder:
+    rollout_mu_z, rollout_s_z = encoder(np.expand_dims(rollout_obs,axis= 0), np.expand_dims(rollout_acts, axis = 0))
+    z_dist = np.mean(abs(z - np.squeeze(rollout_mu_z)))
+  euclidean_dist = np.mean(abs(rollout_obs[:length,:2] - np.squeeze(obs, axis=0)[:length,:2]))
   with summary_writer.as_default():
       current_total_steps = int(current_total_steps)
       if train:
-          print('Frame: ', current_total_steps, ' Z_distance: ', z_dist, ' Euclidean Distance: ', euclidean_dist)
-          tf.summary.scalar('Z_distance', int(z_dist), step=current_total_steps)
+          print('Frame: ', current_total_steps, 'Euclidean Distance: ', euclidean_dist)
+          if encoder: tf.summary.scalar('Z_distance', z_dist, step=current_total_steps)
           tf.summary.scalar('Euclidean Distance', euclidean_dist, step=current_total_steps)
       else:
-          print('Test Frame: ', current_total_steps, ' Z_distance: ', z_dist, ' Euclidean Distance: ', euclidean_dist)
-          tf.summary.scalar('Test Z_distance', z_dist, step=current_total_steps)
+          print('Test Frame: ', current_total_steps, ' Euclidean Distance: ', euclidean_dist)
+          if encoder: tf.summary.scalar('Test Z_distance', z_dist, step=current_total_steps)
           tf.summary.scalar('Test Euclidean Distance', euclidean_dist, step=current_total_steps)
 
 encoder = TRAJECTORY_ENCODER_LSTM(LAYER_SIZE, LATENT_DIM, P_DROPOUT)
@@ -500,15 +514,29 @@ def training_loop(env_fn, ac_kwargs=dict(), seed=0,
 
     env.set_sparse_reward()
     # Get Env dimensions
+
+    hindsight_encoder = None # turn off encoder, just have reward based on if it reaches the goal, like normal HER.
+    latent = True
+    #TODO add latent dim for z learning
     in_dim = env.observation_space.spaces['observation'].shape[0] + env.observation_space.spaces['desired_goal'].shape[0]
+    if latent:
+         in_dim += LATENT_DIM
+
     act_dim = env.action_space.shape[0]
     SAC = SAC_model(env, in_dim, act_dim, ac_kwargs['hidden_sizes'], lr, gamma, alpha, polyak, load, exp_name)
 
     # update the actor to our boi's weights.
     SAC.actor = ACTOR(LAYER_SIZE, act_dim, P_DROPOUT)
     SAC.build_models(BATCH_SIZE, in_dim, act_dim)
-    #assign_variables(actor, SAC.actor)
+    # TODO assign the variables as an init point
+    if latent:
+        assign_variables(actor, SAC.actor)        # won't work if not latent as loaded in actors are latent conditioned.
+
+
     SAC.models['actor'] = SAC.actor
+
+
+
 
     # Experience buffer
     replay_buffer = LatentHERReplayBuffer(env, in_dim, act_dim, replay_size, n_sampled_goal=4,
@@ -528,19 +556,20 @@ def training_loop(env_fn, ac_kwargs=dict(), seed=0,
     # now collect epsiodes
     total_steps = steps_per_epoch * epochs
     steps_collected = 0
-
+    epoch_ticker = 0
 
     sample_size = 20
     train_set = iter(dataset.shuffle(valid_len).batch(sample_size).repeat(EPOCHS))
     # sample a bunch of expert trajectories to try to imitate
     s_i, z, s_g, obs, acts, _, lengths = sample_expert_trajectory(train_set, encoder)
     for r in range(sample_size):
-        episodes, steps = rollout_trajectories(n_steps=lengths[r], env=env, max_ep_len=lengths[r], actor=SAC.actor.get_deterministic_action,
-                                               start_state=s_i[r], s_g = s_g[r], exp_name=exp_name, return_episode=True,
-                                               goal_based=True, current_total_steps=steps_collected)
+        #TODO include z for z learning
+        if not latent: z[r] = None # when not latent, none z.
+        episodes, steps = rollout_trajectories(n_steps=max_ep_len, z = z[r], env=env, max_ep_len=lengths[r], actor=SAC.actor.get_deterministic_action,start_state=s_i[r], s_g = s_g[r], exp_name=exp_name, return_episode=True,goal_based=True, current_total_steps=int(steps_collected), summary_writer = summary_writer)
         steps_collected += steps
-        [replay_buffer.store_hindsight_episode(episode) for episode in episodes]
-        log_metrics(summary_writer, steps_collected, episodes, obs[r], acts[r], z[r], encoder,lengths[r], train = True)
+        #TODO pass encoder for z learning
+        [replay_buffer.store_hindsight_episode(episode, encoder = hindsight_encoder, latent = latent) for episode in episodes]
+        log_metrics(summary_writer, steps_collected, episodes, obs[r], acts[r], z[r], lengths[r], hindsight_encoder)
 
     # now update after
     update_models(SAC, replay_buffer, steps=steps_collected, batch_size=batch_size)
@@ -551,48 +580,27 @@ def training_loop(env_fn, ac_kwargs=dict(), seed=0,
     while steps_collected < total_steps:
         # collect an episode
         s_i, z, s_g, obs, acts, _, lengths = sample_expert_trajectory(train_set, encoder)
-        episodes, steps = rollout_trajectories(n_steps=lengths[0], env=env, max_ep_len=lengths[0],
-                                               actor=SAC.actor.get_deterministic_action, start_state = s_i[0], s_g= s_g[0],
-                                               current_total_steps=steps_collected, exp_name=exp_name,
-                                               return_episode=True, goal_based=True)
+        #TODO include z for z learning
+        if not latent: z[0] = None # when not latent, none z.
+        episodes, steps = rollout_trajectories(n_steps=max_ep_len, z = z[0], env=env, max_ep_len=max_ep_len,actor=SAC.actor.get_stochastic_action, start_state = s_i[0], s_g= s_g[0],current_total_steps=int(steps_collected), exp_name=exp_name,return_episode=True, goal_based=True, summary_writer = summary_writer)
         steps_collected += steps
         # take than many training steps
-        [replay_buffer.store_hindsight_episode(episode) for episode in episodes]
-        update_models(SAC, replay_buffer, steps=max_ep_len, batch_size=batch_size)
-        log_metrics(summary_writer, steps_collected, episodes, obs[0], acts[0], z[0], encoder, lengths[0])
-        # we also want to compute z distance and euclidean distance of trajectories, and summary record them here.
+        #TODO pass encoder for z learning
+        [replay_buffer.store_hindsight_episode(episode, encoder = hindsight_encoder, latent = latent) for episode in episodes]
+        update_models(SAC, replay_buffer, steps=steps, batch_size=batch_size)
+        log_metrics(summary_writer, steps_collected, episodes, obs[0], acts[0], z[0],lengths[0], hindsight_encoder)
 
-        # if an epoch has elapsed, save and test.
-        
-        if steps_collected > 0 and steps_collected % steps_per_epoch == 0:
+        if steps_collected >= epoch_ticker:
             SAC.save_weights()
             # Test the performance of the deterministic version of the agent.
             for i in range(0,10):
                 s_i, _, s_g, obs, acts, mu_z, lengths = sample_expert_trajectory(train_set, encoder)
-                episodes, steps = rollout_trajectories(n_steps=lengths[0], env=test_env, max_ep_len=lengths[0],
-                                                       actor=SAC.actor.get_deterministic_action,start_state = s_i[0], s_g=s_g[0],
-                                                       current_total_steps=steps_collected, exp_name=exp_name,
-                                                       return_episode=True, goal_based=True, train = False, render = True)
-                log_metrics(summary_writer, steps_collected, episodes, obs[0], acts[0], mu_z[0], encoder, lengths[0], train = False)
-            # we also want to compute z distance and euclidean distance of trajectories, and summary record them here.
+                #TODO include z for z learning
+                if not latent: z[0] = None # when not latent, none z.
+                episodes, steps = rollout_trajectories(n_steps=max_ep_len, z = mu_z[0], env=test_env, max_ep_len=max_ep_len,actor=SAC.actor.get_deterministic_action,start_state = s_i[0], s_g=s_g[0],current_total_steps=int(steps_collected), exp_name=exp_name,return_episode=True, goal_based=True, train = False, render = True, summary_writer = summary_writer)
+                log_metrics(summary_writer, steps_collected, episodes, obs[0], acts[0], mu_z[0], lengths[0], hindsight_encoder, train = False)
 
-            ## Z distance, euclidean distance?
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+            epoch_ticker += steps_per_epoch
 
 
 
@@ -617,7 +625,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    experiment_name = 'HER_' + args.env + '_Hidden_' + str(args.hid) + 'l_' + str(args.l)
+    experiment_name = 'Latent_HER_' + args.env + '_Hidden_' + str(args.hid) + 'l_' + str(args.l)
 
     training_loop(lambda: gym.make(args.env),
                   ac_kwargs=dict(hidden_sizes=[args.hid] * args.l),
