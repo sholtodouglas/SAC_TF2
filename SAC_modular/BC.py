@@ -19,9 +19,13 @@ from gym import wrappers
 # observations= np.load('collected_data/10000no_reset_vel_pointMass-v0_Hidden_128l_2expert_obs_.npy').astype('float32')
 # actions= np.load('collected_data/10000no_reset_vel_pointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
 
-observations= np.load('collected_data/11000GAILpointMass-v0_Hidden_128l_2expert_obs_.npy').astype('float32')
-actions= np.load('collected_data/11000GAILpointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
+# observations= np.load('collected_data/11000GAILpointMass-v0_Hidden_128l_2expert_obs_.npy').astype('float32')
+# actions= np.load('collected_data/11000GAILpointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
 
+
+observations = np.load('collected_data/30000HER_pointMass-v0_Hidden_128l_2expert_obs_.npy').astype(
+    'float32')
+actions = np.load('collected_data/30000HER_pointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
 
 train_length = int(0.9*(len(observations)))
 print(train_length)

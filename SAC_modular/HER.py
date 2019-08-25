@@ -4,10 +4,13 @@ import gym
 import pybullet
 import reach2D
 import pointMass #  the act of importing registers the env.
+import ur5_RL
 import time
 from common import *
 from SAC import *
 import copy
+import psutil
+import ray
 
 ############################################################################################################
 #Her with additional support for representation learning
@@ -139,12 +142,13 @@ class HERReplayBuffer:
 
 # This is our training loop.
 def training_loop(env_fn,  ac_kwargs=dict(), seed=0, 
-        steps_per_epoch=2000, epochs=100, replay_size=int(1e6), gamma=0.99, 
-        polyak=0.995, lr=1e-3, alpha=0.2, batch_size=100, start_steps=3000, 
-        max_ep_len=1000, save_freq=1, load = False, exp_name = "Experiment_1", render = False, strategy = 'future'):
+        steps_per_epoch=2000, epochs=100, replay_size=int(1e6), gamma=0.99,
+        polyak=0.995, lr=1e-3, alpha=0.2, batch_size=100, start_steps=3000,
+        max_ep_len=300, save_freq=1, load = False, exp_name = "Experiment_1", render = False, strategy = 'future', num_cpus = 'max'):
     
   tf.random.set_seed(seed)
   np.random.seed(seed)
+
   env, test_env = env_fn(), env_fn()
   try:
     env.set_sparse_reward()
@@ -175,6 +179,8 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
 
   if not load:
   # collect some initial random steps to initialise
+
+
     episodes, steps  = rollout_trajectories(n_steps = start_steps,env = env, max_ep_len = max_ep_len, actor = 'random', summary_writer = summary_writer, exp_name = exp_name, return_episode = True, goal_based = True)
     steps_collected += steps
     [replay_buffer.store_hindsight_episode(episode) for episode in episodes]
@@ -193,7 +199,7 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
     if steps_collected  > 0 and steps_collected  % steps_per_epoch == 0:
         SAC.save_weights()
         # Test the performance of the deterministic version of the agent.
-        rollout_trajectories(n_steps = max_ep_len*10,env = test_env, max_ep_len = max_ep_len, actor = SAC.actor.get_deterministic_action, summary_writer=summary_writer, current_total_steps = steps_collected, train = False, render = True, exp_name = exp_name, return_episode = True, goal_based = True)
+        rollout_trajectories(n_steps = max_ep_len*5,env = test_env, max_ep_len = max_ep_len, actor = SAC.actor.get_deterministic_action, summary_writer=summary_writer, current_total_steps = steps_collected, train = False, render = True, exp_name = exp_name, return_episode = True, goal_based = True)
 
 
 
@@ -207,8 +213,8 @@ if __name__ == '__main__':
     parser.add_argument('--l', type=int, default=2)
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--seed', '-s', type=int, default=0)
-    parser.add_argument('--epochs', type=int, default=50)
-    parser.add_argument('--max_ep_len', type=int, default=200)
+    parser.add_argument('--epochs', type=int, default=500)
+    parser.add_argument('--max_ep_len', type=int, default=200) # fetch reach learns amazingly if 50, but not if 200 -why?
     parser.add_argument('--exp_name', type=str, default='experiment_1')
     parser.add_argument('--load', type=bool, default=False)
     parser.add_argument('--render', type=bool, default=False)
@@ -217,7 +223,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    experiment_name = 'HER_'+args.env+'_Hidden_'+str(args.hid)+'l_'+str(args.l)
+    experiment_name = 'UR5_HER_'+args.env+'_Hidden_'+str(args.hid)+'l_'+str(args.l)
 
     training_loop(lambda : gym.make(args.env), 
       ac_kwargs=dict(hidden_sizes=[args.hid]*args.l),

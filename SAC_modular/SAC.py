@@ -12,6 +12,7 @@ print(tf.__version__)
 import pybullet
 import reach2D
 import pointMass
+import ur5_RL
 
 import tensorflow_probability as tfp
 from gym import wrappers
@@ -313,7 +314,7 @@ class SAC_model():
 
 def SAC(env_fn, ac_kwargs=dict(), seed=0,
                   steps_per_epoch=2000, epochs=100, replay_size=int(1e6), gamma=0.99,
-                  polyak=0.995, lr=1e-3, alpha=0.2, batch_size=100, start_steps=3000,
+                  polyak=0.995, lr=1e-3, alpha=0.2, batch_size=100, start_steps=2000,
                   max_ep_len=1000, save_freq=1, load=False, exp_name="Experiment_1", render=False):
     tf.random.set_seed(seed)
     np.random.seed(seed)
@@ -375,7 +376,7 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env', type=str, default='reacher2D-v0')
+    parser.add_argument('--env', type=str, default='pointMass-v0')
     parser.add_argument('--hid', type=int, default=128)
     parser.add_argument('--l', type=int, default=2)
     parser.add_argument('--gamma', type=float, default=0.99)
@@ -387,7 +388,7 @@ if __name__ == '__main__':
     parser.add_argument('--render', type=bool, default=False)
     args = parser.parse_args()
 
-    experiment_name = 'no_reset_vel_' + args.env + '_Hidden_' + str(args.hid) + 'l_' + str(args.l)
+    experiment_name = '_' + args.env + '_Hidden_' + str(args.hid) + 'l_' + str(args.l)
 
     SAC(lambda: gym.make(args.env),
                   ac_kwargs=dict(hidden_sizes=[args.hid] * args.l),
