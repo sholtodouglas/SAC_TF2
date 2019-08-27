@@ -164,7 +164,7 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
 
             # else it will be the end of the loop and of the function.
     if return_episode:
-        return episode_buffer, n_steps
+        return {'episodes':episode_buffer, 'n_steps':n_steps}
     return n_steps
 
 

@@ -10,7 +10,9 @@ from common import *
 from SAC import *
 import copy
 import psutil
-import ray
+import multiprocessing as mp
+
+#TODO Answer why reward scaling makes such a damn difference?
 
 ############################################################################################################
 #Her with additional support for representation learning
@@ -149,11 +151,15 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
   tf.random.set_seed(seed)
   np.random.seed(seed)
 
-  env, test_env = env_fn(), env_fn()
-  try:
-    env.set_sparse_reward()
-  except:
-      print('Env already uses sparse rewards.')
+
+
+  test_env = env_fn()
+  num_cpus = psutil.cpu_count(logical=False)
+  env = env_fn()
+  #pybullet needs the GUI env to be reset first for our noncollision stuff to work.
+  test_env.render(mode='human')
+  test_env.reset()
+
 
   # Get Env dimensions
   obs_dim = env.observation_space.spaces['observation'].shape[0] + env.observation_space.spaces['desired_goal'].shape[0]
@@ -179,20 +185,26 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
 
   if not load:
   # collect some initial random steps to initialise
-
-
-    episodes, steps  = rollout_trajectories(n_steps = start_steps,env = env, max_ep_len = max_ep_len, actor = 'random', summary_writer = summary_writer, exp_name = exp_name, return_episode = True, goal_based = True)
-    steps_collected += steps
-    [replay_buffer.store_hindsight_episode(episode) for episode in episodes]
+    episodes = rollout_trajectories(n_steps = start_steps,env = env, max_ep_len = max_ep_len, actor = 'random', summary_writer = summary_writer, exp_name = exp_name, return_episode = True, goal_based = True)
+    steps_collected += episodes['n_steps']
+    [replay_buffer.store_hindsight_episode(e) for e in episodes['episodes']]
+  # episodes, steps  = rollout_trajectories(n_steps = start_steps,env = env, max_ep_len = max_ep_len, actor = 'random', summary_writer = summary_writer, exp_name = exp_name, return_episode = True, goal_based = True)
+    # steps_collected += steps
+    # [replay_buffer.store_hindsight_episode(episode) for episode in episodes]
     update_models(SAC, replay_buffer, steps = steps_collected, batch_size = batch_size)
 
   # now act with our actor, and alternately collect data, then train.
   while steps_collected < total_steps:
     # collect an episode
-    episodes, steps   = rollout_trajectories(n_steps = max_ep_len,env = env, max_ep_len = max_ep_len, actor = SAC.actor.get_stochastic_action, summary_writer=summary_writer, current_total_steps = steps_collected, exp_name = exp_name, return_episode = True, goal_based = True)
-    steps_collected += steps
-    # take than many training steps
-    [replay_buffer.store_hindsight_episode(episode) for episode in episodes]
+    # episodes, steps   = rollout_trajectories(n_steps = max_ep_len,env = env, max_ep_len = max_ep_len, actor = SAC.actor.get_stochastic_action, summary_writer=summary_writer, current_total_steps = steps_collected, exp_name = exp_name, return_episode = True, goal_based = True)
+    # steps_collected += steps
+
+    # # take than many training steps
+    # [replay_buffer.store_hindsight_episode(episode) for episode in episodes]
+    episodes = rollout_trajectories(n_steps = max_ep_len,env = env, max_ep_len = max_ep_len, actor = SAC.actor.get_stochastic_action, summary_writer=summary_writer, current_total_steps = steps_collected, exp_name = exp_name, return_episode = True, goal_based = True)
+    steps_collected += episodes['n_steps']
+    [replay_buffer.store_hindsight_episode(e) for e in episodes['episodes']]
+
     update_models(SAC, replay_buffer, steps = max_ep_len, batch_size = batch_size)
 
     # if an epoch has elapsed, save and test.
@@ -216,14 +228,14 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=500)
     parser.add_argument('--max_ep_len', type=int, default=200) # fetch reach learns amazingly if 50, but not if 200 -why?
     parser.add_argument('--exp_name', type=str, default='experiment_1')
-    parser.add_argument('--load', type=bool, default=False)
+    parser.add_argument('--load', type=bool, default=True)
     parser.add_argument('--render', type=bool, default=False)
     parser.add_argument('--strategy', type=str, default='future')
 
 
     args = parser.parse_args()
 
-    experiment_name = 'UR5_HER_'+args.env+'_Hidden_'+str(args.hid)+'l_'+str(args.l)
+    experiment_name = 'HER_'+args.env+'_Hidden_'+str(args.hid)+'l_'+str(args.l)
 
     training_loop(lambda : gym.make(args.env), 
       ac_kwargs=dict(hidden_sizes=[args.hid]*args.l),

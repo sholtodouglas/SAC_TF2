@@ -319,6 +319,8 @@ def SAC(env_fn, ac_kwargs=dict(), seed=0,
     tf.random.set_seed(seed)
     np.random.seed(seed)
     env, test_env = env_fn(), env_fn()
+    test_env.render(mode='human')
+    test_env.reset()
 
     env = wrappers.FlattenDictWrapper(env, dict_keys=['observation', 'desired_goal'])
     test_env = wrappers.FlattenDictWrapper(test_env, dict_keys=['observation', 'desired_goal'])
@@ -367,9 +369,6 @@ def SAC(env_fn, ac_kwargs=dict(), seed=0,
             rollout_trajectories(n_steps=max_ep_len * 10, env=test_env, max_ep_len=max_ep_len,
                                  actor=SAC.actor.get_deterministic_action, summary_writer=summary_writer,
                                  current_total_steps=steps_collected, train=False, render=True, exp_name=exp_name)
-
-    # MODIFIABLE VARIBALES TODO PROPERLY PUT THIS IN A CLASS
-    # ENV_NAME='reacher2D-v0'
 
 
 if __name__ == '__main__':

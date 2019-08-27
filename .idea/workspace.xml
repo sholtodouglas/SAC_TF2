@@ -2,18 +2,16 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="269596aa-5d32-4b89-92a5-2a3138f9f326" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/SAC_modular/latent.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SAC_modular/AIL.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SAC_modular/BC.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SAC_modular/DAIL.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SAC_modular/GAIL.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SAC_modular/HER.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SAC_modular/HLIL.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SAC_modular/SAC.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SAC_modular/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/SAC_modular/demo_latent_planning.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SAC_modular/collect_expert.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/SAC_modular/common.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SAC/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SAC/core.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SAC/sac.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SAC_modular/HER.py" beforeDir="false" afterPath="$PROJECT_DIR$/SAC_modular/HER.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SAC_modular/SAC.py" beforeDir="false" afterPath="$PROJECT_DIR$/SAC_modular/SAC.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SAC_modular/collect_expert.py" beforeDir="false" afterPath="$PROJECT_DIR$/SAC_modular/collect_expert.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SAC_modular/common.py" beforeDir="false" afterPath="$PROJECT_DIR$/SAC_modular/common.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SAC_modular/demo_latent_planning.py" beforeDir="false" afterPath="$PROJECT_DIR$/SAC_modular/demo_latent_planning.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SAC_modular/timings_0.json" beforeDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -29,8 +27,8 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/SAC_modular/HER.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-1336">
-              <caret line="133" selection-start-line="133" selection-end-line="133" />
+            <state relative-caret-position="163">
+              <caret line="161" selection-start-line="161" selection-end-line="161" />
               <folding>
                 <element signature="e#0#18#0" expanded="true" />
               </folding>
@@ -41,8 +39,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/SAC_modular/collect_expert.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="220">
-              <caret line="51" selection-start-line="51" selection-end-line="51" />
+            <state relative-caret-position="795">
+              <caret line="53" column="21" selection-start-line="53" selection-start-column="21" selection-end-line="53" selection-end-column="21" />
               <folding>
                 <element signature="e#0#10#0" expanded="true" />
               </folding>
@@ -51,31 +49,10 @@
         </entry>
       </file>
       <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/SAC_modular/latent.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="154">
-              <caret line="148" selection-start-line="148" selection-end-line="148" />
-              <folding>
-                <element signature="e#0#23#0" expanded="true" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$USER_HOME$/python3/lib/python3.6/site-packages/tensorflow/python/framework/ops.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="101">
-              <caret line="6167" selection-start-line="6167" selection-end-line="6167" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/SAC_modular/SAC.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="1280">
-              <caret line="316" column="81" selection-start-line="316" selection-start-column="81" selection-end-line="316" selection-end-column="81" />
+            <state relative-caret-position="270">
+              <caret line="18" column="20" selection-start-line="18" selection-start-column="20" selection-end-line="18" selection-end-column="20" />
               <folding>
                 <element signature="e#0#18#0" expanded="true" />
               </folding>
@@ -86,8 +63,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/SAC_modular/common.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="15">
-              <caret line="24" selection-start-line="24" selection-end-line="24" />
+            <state relative-caret-position="705">
+              <caret line="47" column="8" selection-start-line="47" selection-start-column="8" selection-end-line="49" selection-end-column="36" />
               <folding>
                 <element signature="e#1#24#0" expanded="true" />
               </folding>
@@ -126,7 +103,6 @@
       <find>encoder(</find>
       <find>log_metrics</find>
       <find>only_use</find>
-      <find>z</find>
       <find>rollout_trajec</find>
       <find>encoder(obs</find>
       <find>index</find>
@@ -136,6 +112,7 @@
       <find>reset</find>
       <find>resetsim</find>
       <find>goal</find>
+      <find>z</find>
     </findStrings>
   </component>
   <component name="Git.Settings">
@@ -153,19 +130,19 @@
         <option value="$PROJECT_DIR$/SAC_modular/AIL.py" />
         <option value="$PROJECT_DIR$/SAC_modular/testhr.py" />
         <option value="$PROJECT_DIR$/SAC_modular/BC.py" />
-        <option value="$PROJECT_DIR$/SAC_modular/demo_latent_planning.py" />
         <option value="$PROJECT_DIR$/SAC_modular/latent.py" />
         <option value="$PROJECT_DIR$/SAC_modular/HLIL.py" />
-        <option value="$PROJECT_DIR$/SAC_modular/collect_expert.py" />
-        <option value="$PROJECT_DIR$/SAC_modular/SAC.py" />
         <option value="$PROJECT_DIR$/../ur5_RL/ur5_RL/envs/environments.py" />
         <option value="$PROJECT_DIR$/SAC_modular/common.py" />
+        <option value="$PROJECT_DIR$/SAC_modular/collect_expert.py" />
+        <option value="$PROJECT_DIR$/SAC_modular/demo_latent_planning.py" />
+        <option value="$PROJECT_DIR$/SAC_modular/SAC.py" />
         <option value="$PROJECT_DIR$/SAC_modular/HER.py" />
       </list>
     </option>
   </component>
-  <component name="ProjectFrameBounds">
-    <option name="x" value="123" />
+  <component name="ProjectFrameBounds" extendedState="6">
+    <option name="x" value="223" />
     <option name="y" value="23" />
     <option name="width" value="1434" />
     <option name="height" value="785" />
@@ -210,7 +187,7 @@
       </list>
     </option>
   </component>
-  <component name="RunManager" selected="Python.HER_pm_obj">
+  <component name="RunManager" selected="Python.HER UR5">
     <configuration name="AIL" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
       <module name="SAC_TF2" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -329,7 +306,7 @@
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/SAC_modular/HER.py" />
-      <option name="PARAMETERS" value="--env ur5_RL-v0 --max_ep_len 50" />
+      <option name="PARAMETERS" value="--env ur5_RL-v0 --max_ep_len 100" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
@@ -379,6 +356,27 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
+    <configuration name="HER" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
+      <module name="SAC_TF2" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="$USER_HOME$/python3/bin/python" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/SAC_modular" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/SAC_modular/HER.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
     <configuration name="HER_pm_obj" type="PythonConfigurationType" factoryName="Python">
       <module name="SAC_TF2" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -392,7 +390,7 @@
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/SAC_modular/HER.py" />
-      <option name="PARAMETERS" value="--env pointMassObject-v0" />
+      <option name="PARAMETERS" value="--env pointMassObject-v0 --max_ep_len 600" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
@@ -435,6 +433,27 @@
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/SAC_modular/HRL.py" />
       <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="SAC" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
+      <module name="SAC_TF2" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="$USER_HOME$/python3/bin/python" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/SAC_modular" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/SAC_modular/SAC.py" />
+      <option name="PARAMETERS" value="--env pointMassObjectDense-v0" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
@@ -528,12 +547,14 @@
     </configuration>
     <list>
       <item itemvalue="Python.HER_pm_obj" />
+      <item itemvalue="Python.SAC" />
       <item itemvalue="Python.HER fetch" />
       <item itemvalue="Python.HER UR5" />
       <item itemvalue="Python.HER 2D UR5 Object" />
       <item itemvalue="Python.HER 2DUR5" />
       <item itemvalue="Python.testhr" />
       <item itemvalue="Python.HER final" />
+      <item itemvalue="Python.HER" />
       <item itemvalue="Python.HRL" />
       <item itemvalue="Python.HLIL" />
       <item itemvalue="Python.BC" />
@@ -560,15 +581,15 @@
     <servers />
   </component>
   <component name="ToolWindowManager">
-    <frame x="123" y="23" width="1434" height="785" extended-state="0" />
+    <frame x="0" y="23" width="1440" height="823" extended-state="6" />
     <editor active="true" />
     <layout>
-      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.4992785" weight="0.15428168" />
-      <window_info id="Structure" order="1" sideWeight="0.5007215" side_tool="true" visible="true" weight="0.15428168" />
+      <window_info active="true" content_ui="combo" id="Project" order="0" sideWeight="0.4978355" visible="true" weight="0.15362932" />
+      <window_info id="Structure" order="1" sideWeight="0.5021645" side_tool="true" weight="0.15428168" />
       <window_info id="Favorites" order="2" side_tool="true" weight="0.32979476" />
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Find" order="1" />
-      <window_info active="true" anchor="bottom" auto_hide="true" id="Run" order="2" visible="true" weight="0.21933623" />
+      <window_info anchor="bottom" auto_hide="true" id="Run" order="2" weight="0.21933623" />
       <window_info anchor="bottom" id="Debug" order="3" weight="0.53535354" />
       <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
@@ -582,12 +603,12 @@
       <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
     </layout>
     <layout-to-restore>
-      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.15428168" />
-      <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
-      <window_info id="Favorites" order="2" side_tool="true" />
+      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.4978355" visible="true" weight="0.15428168" />
+      <window_info id="Structure" order="1" sideWeight="0.5021645" side_tool="true" visible="true" weight="0.15428168" />
+      <window_info id="Favorites" order="2" side_tool="true" weight="0.32979476" />
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Find" order="1" />
-      <window_info active="true" anchor="bottom" auto_hide="true" id="Run" order="2" visible="true" weight="0.21933623" />
+      <window_info anchor="bottom" auto_hide="true" id="Run" order="2" weight="0.21933623" />
       <window_info anchor="bottom" id="Debug" order="3" weight="0.53535354" />
       <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
@@ -751,13 +772,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/../pointMass/pointMass/envs/environments.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="296">
-          <caret line="86" column="62" selection-start-line="86" selection-start-column="62" selection-end-line="86" selection-end-column="62" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/SAC_modular/jj.py" />
     <entry file="file://$PROJECT_DIR$/SAC_modular/HRL.py" />
     <entry file="file://$PROJECT_DIR$/SAC_modular/AIL.py" />
@@ -800,26 +814,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/SAC_modular/latent.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="154">
-          <caret line="148" selection-start-line="148" selection-end-line="148" />
-          <folding>
-            <element signature="e#0#23#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/SAC_modular/demo_latent_planning.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="480">
-          <caret line="32" selection-start-line="32" selection-end-line="37" selection-end-column="141" />
-          <folding>
-            <element signature="e#0#20#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/SAC_modular/HLIL.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="-1268">
@@ -842,26 +836,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/SAC_modular/collect_expert.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="220">
-          <caret line="51" selection-start-line="51" selection-end-line="51" />
-          <folding>
-            <element signature="e#0#10#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/SAC_modular/SAC.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="1280">
-          <caret line="316" column="81" selection-start-line="316" selection-start-column="81" selection-end-line="316" selection-end-column="81" />
-          <folding>
-            <element signature="e#0#18#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/../ur5_RL/ur5_RL/envs/environments.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="-3882">
@@ -872,22 +846,69 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/SAC_modular/common.py">
+    <entry file="file://$PROJECT_DIR$/SAC_modular/demo_latent_planning.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="15">
-          <caret line="24" selection-start-line="24" selection-end-line="24" />
+        <state relative-caret-position="351">
+          <caret line="65" column="74" selection-start-line="65" selection-start-column="74" selection-end-line="65" selection-end-column="74" />
           <folding>
-            <element signature="e#1#24#0" expanded="true" />
+            <element signature="e#0#20#0" expanded="true" />
           </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/SAC_modular/latent.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="154">
+          <caret line="148" selection-start-line="148" selection-end-line="148" />
+          <folding>
+            <element signature="e#0#23#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/../pointMass/pointMass/envs/environments.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-1950">
+          <caret line="82" selection-start-line="82" selection-end-line="82" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/SAC_modular/HER.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-1336">
-          <caret line="133" selection-start-line="133" selection-end-line="133" />
+        <state relative-caret-position="163">
+          <caret line="161" selection-start-line="161" selection-end-line="161" />
           <folding>
             <element signature="e#0#18#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/SAC_modular/collect_expert.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="795">
+          <caret line="53" column="21" selection-start-line="53" selection-start-column="21" selection-end-line="53" selection-end-column="21" />
+          <folding>
+            <element signature="e#0#10#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/SAC_modular/SAC.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="270">
+          <caret line="18" column="20" selection-start-line="18" selection-start-column="20" selection-end-line="18" selection-end-column="20" />
+          <folding>
+            <element signature="e#0#18#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/SAC_modular/common.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="705">
+          <caret line="47" column="8" selection-start-line="47" selection-start-column="8" selection-end-line="49" selection-end-column="36" />
+          <folding>
+            <element signature="e#1#24#0" expanded="true" />
           </folding>
         </state>
       </provider>

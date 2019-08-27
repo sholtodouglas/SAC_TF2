@@ -17,7 +17,7 @@ ACHEIVED_GOAL_INDEX = 2  # point up to which we care about the goal
 
 MAX_SEQ_LEN = 60
 OBS_GOAL_INDEX = 4
-
+#TODO FIX episode return
 
 env = gym.make('pointMass-v0')
 
@@ -63,7 +63,7 @@ for i in range(0,10):
     episodes, n_steps = rollout_trajectories(REPLAN_HORIZON, env, max_ep_len=REPLAN_HORIZON, actor=actor.get_deterministic_action,
                                              exp_name='point', z=plan, s_g=s_g, start_state=s_i, return_episode=True,
                                              goal_based=True, render =True)
-    planner_obs, planner_acts = episode_to_trajectory(episodes[0], representation_learning=True)
+    planner_obs, planner_acts = episode_to_trajectory(episodes['episodes'][0], representation_learning=True)
 
     #s_i = tf.squeeze(planner_obs[REPLAN_HORIZON//5,:])
     #plt.scatter(np.squeeze(planner_obs)[:REPLAN_HORIZON//5, 0], np.squeeze(planner_obs)[:REPLAN_HORIZON//5, 1], s=10)
