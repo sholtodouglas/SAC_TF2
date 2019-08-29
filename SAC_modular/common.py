@@ -23,14 +23,17 @@ def assign_variables(net1, net2):
 #   the direct euclidean distance between states acheived and demo states, to test the non discriminator parts of our algorithim work.
 # --Return episode: Returns a list of transitions, either to convert to a trajectory for plotting/encoding, or for direct insertion into a HER buffer.
 def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer=None, summary_writer=None,
-                         current_total_steps=0, render=False, train=True, exp_name=None, z=None, s_g=None,
-                         return_episode=False, replay_trajectory=None, compare_states=None, start_state=None,
-                         goal_based=False, lstm_actor=None, only_use_baseline=False):
+                         current_total_steps=0,
+                         render=False, train=True, exp_name=None, z=None, s_g=None, return_episode=False,
+                         replay_trajectory=None,
+                         compare_states=None, start_state=None, goal_based=False, lstm_actor=None,
+                         only_use_baseline=False, replay_obs=None):
+
+
     # reset the environment
     def set_init(o, env):
         if 'point' in exp_name:
-            env.initalize_start_pos(start_state[0:2],
-                                    start_state[2:4])  # init vel to 0, but x and y to the desired pos.
+            env.initialize_start_pos(start_state)  # init vel to 0, but x and y to the desired pos.
             o['observation'] = start_state
         else:
             raise NotImplementedError
@@ -39,7 +42,7 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
 
     ###################  quick fix for the need for this to activate rendering pre env reset.  ###################
     ###################  MUST BE A BETTER WAY? Env realising it needs to change pybullet client?  ###################
-    if 'reacher' in exp_name or 'point' in exp_name or 'robot' in exp_name or 'UR5' in exp_name:
+    if 'reacher' in exp_name or 'point' in exp_name or 'robot' in exp_name or 'UR5' in exp_name or 'ur5' in exp_name:
         pybullet = True
     else:
         pybullet = False
@@ -70,39 +73,39 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
 
     if lstm_actor is not None:
         past_state = [None]
+
     for t in range(n_steps):
 
         if actor == 'random':
             a = env.action_space.sample()
-        elif replay_trajectory != None:  # replay a trajectory that we've fed in so that we can make sure this is properly deterministic and compare it to our estimated action based trajectory/
+        elif replay_trajectory is not None:  # replay a trajectory that we've fed in so that we can make sure this is properly deterministic and compare it to our estimated action based trajectory/
             a = replay_trajectory[t]
+        elif replay_obs is not None:
+            a, past_state = lstm_actor(np.concatenate([replay_obs[t], z, o['desired_goal']], axis=0),
+                                       past_state=past_state)
         elif z_learning:
             if lstm_actor is not None:
-
-                # a_base, past_state = lstm_actor(np.concatenate([o['observation'], z, o['desired_goal']], axis=0),
-                #                                 past_state=past_state)
-                # for when it is not an lstm lol
-                a_base = lstm_actor(np.concatenate([o['observation'], z, o['desired_goal']], axis=0))
-
+                print('\n', o['observation'], z, o['desired_goal'], '\n')
+                a_base, past_state = lstm_actor(np.concatenate([o['observation'], z, o['desired_goal']], axis=0),
+                                                past_state=past_state)
 
                 if only_use_baseline:
                     a = a_base
                 else:
-                    o['baseline_action'] = a_base
-                    a = actor(np.concatenate([o['observation'], z, o['desired_goal'], a_base], axis=0))
+                    o = np.concatenate(o, a_base)  # extend the observation by the lstm_actor's act.
+                    a = actor(np.concatenate([o['observation'], z, o['desired_goal']], axis=0))
             else:
                 a = actor(np.concatenate([o['observation'], z, o['desired_goal']], axis=0))
         elif goal_based:
             a = actor(np.concatenate([o['observation'], o['desired_goal']], axis=0))
         else:
+
             a = actor(o)
         # Step the env
 
         if lstm_actor is not None and only_use_baseline is False:
-
             o2, r, d, _ = env.step(
                 a + a_base)  # final action is the sum of the baseline, and the adjustment by our RL learnt actor.
-            o2['baseline_action'] = a_base
         else:
             o2, r, d, _ = env.step(a)
 
@@ -136,7 +139,6 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
         if return_episode:
             if z_learning:
                 episode.append([o, a, r, o2, d, z])
-
             else:
                 episode.append([o, a, r, o2, d])  # add the full transition to the episode.
 
@@ -164,7 +166,7 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
 
             # else it will be the end of the loop and of the function.
     if return_episode:
-        return {'episodes':episode_buffer, 'n_steps':n_steps}
+        return {'episodes': episode_buffer, 'n_steps': n_steps}
     return n_steps
 
 

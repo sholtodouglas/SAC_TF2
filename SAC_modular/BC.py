@@ -23,9 +23,16 @@ from gym import wrappers
 # actions= np.load('collected_data/11000GAILpointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
 
 
-observations = np.load('collected_data/30000HER_pointMass-v0_Hidden_128l_2expert_obs_.npy').astype(
+# observations = np.load('collected_data/30000HER_pointMass-v0_Hidden_128l_2expert_obs_.npy').astype(
+#     'float32')
+# actions = np.load('collected_data/30000HER_pointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
+observations = np.load('collected_data/10000HER_pointMassObject-v0_Hidden_128l_2expert_obs_.npy').astype(
     'float32')
-actions = np.load('collected_data/30000HER_pointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
+actions = np.load('collected_data/10000HER_pointMassObject-v0_Hidden_128l_2expert_actions.npy').astype('float32')
+#ENV_NAME = 'reacher2D-v0'
+#ENV_NAME = 'pointMass-v0'
+ENV_NAME = 'pointMassObject-v0'
+env = gym.make(ENV_NAME)
 
 train_length = int(0.9*(len(observations)))
 print(train_length)
@@ -38,9 +45,7 @@ print(train_obs.shape)
 print(valid_obs.shape)
 
 #ENV_NAME='Pendulum-v0'
-#ENV_NAME = 'reacher2D-v0'
-ENV_NAME = 'pointMass-v0'
-env = gym.make(ENV_NAME)
+
 
 env = wrappers.FlattenDictWrapper(env, dict_keys=['observation', 'desired_goal'])
 act_dim = env.action_space.shape[0]

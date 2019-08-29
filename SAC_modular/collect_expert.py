@@ -27,7 +27,7 @@ def episode_to_trajectory(episode, include_goal = False, flattened = False):
 
 
 ENV_NAME = 'pointMassObject-v0'#'reacher2D-v0'
-
+ENV_NAME = 'ur5_RL_relative-v0'
 #ENV_NAME = 'Pendulum-v0'
 env = gym.make(ENV_NAME) 
 
@@ -40,15 +40,16 @@ act_dim = env.action_space.shape[0]
 #experiment_name = 'pos_cntrl_exp_pointMass-v0_Hidden_128l_2'
 #experiment_name = 'no_reset_vel_pointMass-v0_Hidden_128l_2'
 experiment_name = 'HER_pointMassObject-v0_Hidden_128l_2'
+experiment_name ='HER_ur5_RL_relative-v0_Hidden_128l_2'
 #experiment_name = 'GAILpointMass-v0_Hidden_128l_2'
 #experiment_name = 'GAILreacher2D-v0_Hidden_128l_2'
 #env.activate_movable_goal()
-#env.activate_roving_goal()
+env.activate_roving_goal()
 
 
 SAC = SAC_model(env, obs_dim, act_dim, [128,128],load = True, exp_name = experiment_name)
-n_steps = 10000
-episodes = rollout_trajectories(n_steps = n_steps,env = env, max_ep_len = 200 , actor = SAC.actor.get_deterministic_action, train = False, render = True, exp_name = experiment_name, return_episode = True)
+n_steps = 20000
+episodes = rollout_trajectories(n_steps = n_steps,env = env, max_ep_len = n_steps , actor = SAC.actor.get_deterministic_action, train = False, render = True, exp_name = experiment_name, return_episode = True)
 
 action_buff = []
 observation_buff = []
