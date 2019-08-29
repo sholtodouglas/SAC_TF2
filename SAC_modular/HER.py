@@ -1,8 +1,9 @@
+
+
 import numpy as np
 import tensorflow as tf
 import gym
 import pybullet
-import reach2D
 import pointMass #  the act of importing registers the env.
 import ur5_RL
 import time
@@ -171,7 +172,7 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
   
   #Logging 
   start_time = time.time()
-  train_log_dir = 'logs/sub/' + exp_name+':'+str(start_time) + '/stochastic'
+  train_log_dir = 'logs/' + exp_name+str(int(start_time))
   summary_writer = tf.summary.create_file_writer(train_log_dir)
 
   def update_models(model, replay_buffer, steps, batch_size):
@@ -212,7 +213,6 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
         SAC.save_weights()
         # Test the performance of the deterministic version of the agent.
         rollout_trajectories(n_steps = max_ep_len*5,env = test_env, max_ep_len = max_ep_len, actor = SAC.actor.get_deterministic_action, summary_writer=summary_writer, current_total_steps = steps_collected, train = False, render = True, exp_name = exp_name, return_episode = True, goal_based = True)
-
 
 
 

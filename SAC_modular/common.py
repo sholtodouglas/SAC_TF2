@@ -2,7 +2,7 @@
 import tensorflow as tf
 import numpy as np
 import copy
-import ray
+
 
 def assign_variables(net1, net2):
   for main, targ in zip(net1.trainable_variables, net2.trainable_variables):
