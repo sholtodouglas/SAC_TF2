@@ -146,6 +146,7 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
         # most recent observation!
 
         o = o2
+        
         # if either we've ended an episdoe, collected all the steps or have reached max ep len and
         # thus need to log ep reward and reset
         if d or (ep_len == int(max_ep_len)) or (t == int((n_steps - 1))):
@@ -172,11 +173,14 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
 
 # used in expert collection, and with conversion of episodes to HER
 # used in expert collection, and with conversion of episodes to HER
-def episode_to_trajectory(episode, include_goal = False, flattened = False, representation_learning = False):
+#extra info is for resetting determinsiticly.
+def episode_to_trajectory(episode, flattened = False, representation_learning = False, include_extra_info= True):
   # episode arrives as a list of o, a, r, o2, d
   # trajectory is two lists, one of o s, one of a s.
   observations = []
   actions = []
+  if include_extra_info:
+    extra_info= []
   for transition in episode:
     if representation_learning:
       o, a, r, o2, d, z = transition
@@ -186,13 +190,14 @@ def episode_to_trajectory(episode, include_goal = False, flattened = False, repr
     if flattened:
       observations.append(o)
     else:
-      if include_goal:
-        observations.append(np.concatenate(o['observation'], o['desired_goal']))
-      else:
         observations.append(o['observation'])
 
+    if include_extra_info:
+        extra_info.append(o['extra_info'])
+        
     actions.append(a)
-
+  if include_extra_info:
+    return np.array(observations), np.array(actions), np.array(extra_info)
   return np.array(observations), np.array(actions)
 
 
