@@ -27,7 +27,7 @@ def episode_to_trajectory(episode, include_goal = False, flattened = False):
 
 
 ENV_NAME = 'pointMassObject-v0'#'reacher2D-v0'
-ENV_NAME = 'ur5_RL_relative-v0'
+#ENV_NAME = 'ur5_RL_relative-v0'
 #ENV_NAME = 'Pendulum-v0'
 env = gym.make(ENV_NAME) 
 
@@ -40,7 +40,7 @@ act_dim = env.action_space.shape[0]
 #experiment_name = 'pos_cntrl_exp_pointMass-v0_Hidden_128l_2'
 #experiment_name = 'no_reset_vel_pointMass-v0_Hidden_128l_2'
 experiment_name = 'HER_pointMassObject-v0_Hidden_128l_2'
-experiment_name ='HER_ur5_RL_relative-v0_Hidden_128l_2'
+#experiment_name ='HER_ur5_RL_relative-v0_Hidden_128l_2'
 #experiment_name = 'GAILpointMass-v0_Hidden_128l_2'
 #experiment_name = 'GAILreacher2D-v0_Hidden_128l_2'
 #env.activate_movable_goal()
