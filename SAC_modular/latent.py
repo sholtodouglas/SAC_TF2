@@ -14,7 +14,7 @@ import numpy as np
 drive_path = ''
 
 class Dataloader():
-    def __init__(self, observations, actions,  MIN_SEQ_LEN = 15, MAX_SEQ_LEN =60, train_test_split = 0.9,):
+    def __init__(self, observations, actions, MIN_SEQ_LEN = 15, MAX_SEQ_LEN =60,  train_test_split = 0.9,):
 
         self.OBS_DIM = observations.shape[1]
         self.ACT_DIM = actions.shape[1]
@@ -123,6 +123,7 @@ class ACTOR(Model):
         self.mu = Dense(ACT_DIM, name='mu')
         self.log_std = Dense(ACT_DIM, activation='tanh', name='log_std')
         self.dropout1 = tf.keras.layers.Dropout(P_DROPOUT)
+        self.use_goal = True
 
     def gaussian_likelihood(self, x, mu, log_std):
         EPS = 1e-8
@@ -150,7 +151,8 @@ class ACTOR(Model):
         # check if the user has fed in z and s_g
         # if not, means they're passing s,z,s_g as one vector through s - this will be in the case of this
         # actor being used in our typical RL algorithms
-        if z != None and s_g != None:
+
+        if z is not None and s_g is not None:
             B = z.shape[0]  # dynamically get batch size
             if len(s.shape) == 3:
                 x = tf.concat([s, z, s_g], axis=2)  # (BATCHSIZE)
@@ -193,6 +195,7 @@ class ACTOR(Model):
         return pi[0]
 
 
+# Planner, 4 layers of 1000, + mu and std layers.
 class PLANNER(Model):
     def __init__(self, LAYER_SIZE, LATENT_DIM, P_DROPOUT):
         super(PLANNER, self).__init__()
@@ -200,8 +203,8 @@ class PLANNER(Model):
         self.d1 = Dense(LAYER_SIZE, activation='relu')
         self.d2 = Dense(LAYER_SIZE, activation='relu')
         self.mu = Dense(LATENT_DIM)
-        self.scale = Dense(LATENT_DIM, activation='softplus')
-
+        # self.log_std = Dense(LATENT_DIM)
+        self.std = Dense(LATENT_DIM, activation='softplus')
         self.dropout1 = tf.keras.layers.Dropout(P_DROPOUT)
         self.dropout2 = tf.keras.layers.Dropout(P_DROPOUT)
         self.dropout3 = tf.keras.layers.Dropout(P_DROPOUT)
@@ -213,9 +216,106 @@ class PLANNER(Model):
         x = self.d2(x)
         x = self.dropout2(x, training=training)
         mu = self.mu(x)
-        s = self.scale(x)
-
+        # log_std = LOG_STD_MIN + 0.5 * (LOG_STD_MAX - LOG_STD_MIN) * (self.log_std(x) + 1)
+        # s = tf.exp(log_std)
+        s = self.std(x)
         return mu, s
+
+
+class LSTM_ACTOR(Model):
+    def __init__(self, LAYER_SIZE, ACT_DIM, P_DROPOUT):
+        super(LSTM_ACTOR, self).__init__()
+        self.lstm = LSTM(LAYER_SIZE, return_state=True, return_sequences=True, activation='tanh',
+                         recurrent_activation='sigmoid', recurrent_dropout=0, use_bias=True, name='layer1')
+
+        self.mu = Dense(ACT_DIM, name='mu')
+        self.log_std = Dense(ACT_DIM, activation='tanh', name='log_std')
+        self.dropout1 = tf.keras.layers.Dropout(P_DROPOUT)
+
+    def gaussian_likelihood(self, x, mu, log_std):
+        EPS = 1e-8
+        pre_sum = -0.5 * (((x - mu) / (tf.exp(log_std) + EPS)) ** 2 + 2 * log_std + np.log(2 * np.pi))
+        return tf.reduce_sum(input_tensor=pre_sum, axis=1)
+
+    def clip_but_pass_gradient(self, x, l=-1., u=1.):
+        clip_up = tf.cast(x > u, tf.float32)
+        clip_low = tf.cast(x < l, tf.float32)
+        return x + tf.stop_gradient((u - x) * clip_up + (l - x) * clip_low)
+
+    def apply_squashing_func(self, mu, pi, logp_pi):
+        # TODO: Tanh makes the gradients bad - we don't necessarily wan't to tanh these - lets confirm later
+        #
+        mu = tf.tanh(mu)
+        pi = tf.tanh(pi)
+
+        # To avoid evil machine precision error, strictly clip 1-pi**2 to [0,1] range.
+        logp_pi -= tf.reduce_sum(input_tensor=tf.math.log(self.clip_but_pass_gradient(1 - pi ** 2, l=0, u=1) + 1e-6),
+                                 axis=1)
+        return mu, pi, logp_pi
+
+    def call(self, s, z=[], s_g=[], training=False, past_state=[None]):
+
+        # check if the user has fed in z and s_g
+        # if not, means they're passing s,z,s_g as one vector through s - this will be in the case of this
+        # actor being used in our typical RL algorithms
+        state_out = None
+
+        if len(s.shape) == 1:
+            B = 1
+            if z is not None and s_g is not None:
+                x = tf.concat([s, z, s_g], axis=0)  # (BATCHSIZE,  OBS+OBS+LATENT)
+            else:
+                x = s
+
+            x = tf.expand_dims(x, 0)
+            x = tf.expand_dims(x, 1)
+
+            # make it (BATCHSIZE,  1, OBS+OBS+LATENT) so LSTM is happy.
+            [x, s1l1, s2l1] = self.lstm(x, initial_state=past_state[0])  # if past_state is none, lstm will create one.
+
+            x = tf.squeeze(x, axis=1)
+            state_out = [[s1l1, s2l1]]
+
+        elif len(s.shape) == 3:
+            if z is not None and s_g is not None:
+                B = z.shape[0]  # dynamically get batch size
+                x = tf.concat([s, z, s_g], axis=2)  # (BATCHSIZE)
+                [x, _, _] = self.lstm(x)
+
+        x = self.dropout1(x, training=training)
+
+        mu = self.mu(x)
+
+        log_std = self.log_std(x)
+        log_std = LOG_STD_MIN + 0.5 * (LOG_STD_MAX - LOG_STD_MIN) * (log_std + 1)
+        std = tf.exp(log_std)
+
+        pi = mu + tf.random.normal(tf.shape(input=mu)) * std
+        logp_pi = self.gaussian_likelihood(pi, mu, log_std)
+
+        # Equivalent to this, should we change over to TFP properly at some point?
+        # For some reason it doesn't work as well on pendulum. Weird.
+        pdf = tfd.Normal(loc=mu, scale=std)
+        # logp_pi = tf.reduce_sum(pdf.log_prob(pi))
+
+        mu, pi, logp_pi = self.apply_squashing_func(mu, pi, logp_pi)
+        if state_out == None:
+            return mu, pi, logp_pi, std, pdf
+        else:
+            return mu, pi, logp_pi, std, pdf, state_out
+
+    def get_deterministic_action(self, o, past_state=[None]):
+        # o should be s,z,s_g concatted together
+        # o = tf.expand_dims(o, axis = 0)
+        mu, _, _, _, _, state_out = self.call(o, past_state=past_state)
+
+        return mu[0], state_out
+
+    def get_stochastic_action(self, o, past_state=[None]):
+        # o = tf.expand_dims(o, axis = 0)
+        _, pi, _, _, _, state_out = self.call(o, past_state=past_state)
+
+        return pi[0], state_out
 
 
 class VAE_Encoder(Model):
@@ -266,7 +366,8 @@ class VAE_Decoder(Model):
         return out
 
 
-def load_weights(extension, BATCH_SIZE, MAX_SEQ_LEN, OBS_DIM, ACT_DIM,ACHIEVED_GOAL_INDEX, LATENT_DIM, encoder, actor, planner = None):
+def load_weights(extension, BATCH_SIZE, MAX_SEQ_LEN, OBS_DIM, ACT_DIM, AG_IDXS, LATENT_DIM, encoder, actor,
+                 planner=None):
     print('Loading in network weights...')
     # load some sample data to initialise the model
     #         load_set = iter(self.dataset.shuffle(self.TRAIN_LEN).batch(self.BATCH_SIZE))
@@ -276,12 +377,12 @@ def load_weights(extension, BATCH_SIZE, MAX_SEQ_LEN, OBS_DIM, ACT_DIM,ACHIEVED_G
     lengths = tf.cast(tf.ones(BATCH_SIZE), tf.int32)
 
     s_i = obs[:, 0, :]
-    s_g = obs[:, -1,:ACHIEVED_GOAL_INDEX]
+    s_g = obs[:, -1, AG_IDXS[0]:AG_IDXS[1]]
     GOAL_DIM = s_g.shape[-1]
-    _,_ = encoder(obs, acts, training=True)
-    _,_ = planner(s_i, s_g)
-    _,_,_,_,_ = actor(tf.zeros((BATCH_SIZE, MAX_SEQ_LEN, OBS_DIM+LATENT_DIM+GOAL_DIM)))
-
+    _, _ = encoder(obs, acts, training=True)
+    _, _ = planner(s_i, s_g)
+    _, _, _, _, _ = actor(tf.zeros((BATCH_SIZE, MAX_SEQ_LEN, OBS_DIM)), tf.zeros((BATCH_SIZE, MAX_SEQ_LEN, LATENT_DIM)),
+                          tf.zeros((BATCH_SIZE, MAX_SEQ_LEN, GOAL_DIM)))
 
     print('Models Initalised')
 
@@ -293,7 +394,6 @@ def load_weights(extension, BATCH_SIZE, MAX_SEQ_LEN, OBS_DIM, ACT_DIM,ACHIEVED_G
         print('No planner in these weights')
     print('Weights loaded.')
     return encoder, actor, planner
-
 
 
 def save_weights(extension, encoder, actor, planner):

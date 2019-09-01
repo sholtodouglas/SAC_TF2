@@ -237,7 +237,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    experiment_name = 'HER_'+args.env+'_Hidden_'+str(args.hid)+'l_'+str(args.l)
+    experiment_name = 'HER2_'+args.env+'_Hidden_'+str(args.hid)+'l_'+str(args.l)
 
     training_loop(lambda : gym.make(args.env), 
       ac_kwargs=dict(hidden_sizes=[args.hid]*args.l),

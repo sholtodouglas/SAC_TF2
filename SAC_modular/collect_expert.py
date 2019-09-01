@@ -37,7 +37,7 @@ if experiment_name == 'HER_pointMassObject-v0_Hidden_128l_2':
 
 
 SAC = SAC_model(env, obs_dim, act_dim, [128,128],load = True, exp_name = experiment_name)
-n_steps = 21000
+n_steps = 30000
 episodes = rollout_trajectories(n_steps = n_steps,env = env, max_ep_len = n_steps,goal_based = not flatten, actor = SAC.actor.get_deterministic_action, train = False, render = True, exp_name = experiment_name, return_episode = True)
 
 action_buff = []
@@ -46,11 +46,11 @@ if extra_info:
 	extra_info_buff = []
 for ep in episodes['episodes']:
 	if extra_info:
-		observations, actions, info = episode_to_trajectory(ep, flattened=True, include_extra_info = True)
+		observations, actions, info = episode_to_trajectory(ep, flattened=flatten, include_extra_info = True)
 
 		extra_info_buff.append(info)
 	else:
-		observations, actions = episode_to_trajectory(ep, flattened = True)
+		observations, actions = episode_to_trajectory(ep, flattened = flatten)
 	action_buff.append(actions)
 	observation_buff.append((observations))
 if extra_info:

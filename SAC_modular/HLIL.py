@@ -29,27 +29,44 @@ import traceback
 # All magic numbers here
 # @title Definitions
 train_test_split = 0.9
-MAX_SEQ_LEN = 60
+MAX_SEQ_LEN = 100
 MIN_SEQ_LEN = 16
 BATCH_SIZE = 64
 LAYER_SIZE = 128
-LATENT_DIM = 6
+LATENT_DIM = 12
 P_DROPOUT = 0.2
-BETA = 0.05
-OBS_GOAL_INDEX = 4  # index from which the goal is in the obs vector
-ACHIEVED_GOAL_INDEX = 2  # point up to which we care about the goal
+BETA = 0.01
+
+
 EPOCHS = 1000
+
+OBJECT_ENV = True
+if OBJECT_ENV:
+    # FOR PM, our state will be x,y,velx,vely,objx, objy, velobjx, velobjy
+
+    AG_IDXS = [3, 5]  # indexes between which our goal is defined.
+else:
+    # FOR PM, state will be x,y,velx,vely,
+
+    AG_IDXS = [0, 2]  # indexes between which our goal is defined.
 #extension = 'saved_models/Z_learning_B005'
 #extension = 'saved_models/Z_learning_0.01'
 #extension = 'saved_models/Z_learning_0.005enc2plan6'
 #extension = 'saved_models/OBSRECONSTRUCTION_MLP'
-# observations = np.load('collected_data/10000HER_pointMass-v0_Hidden_128l_2expert_obs_.npy').astype('float32')[:,
-#                0:OBS_GOAL_INDEX]  # Don't include the goal in the obs
+# observations = np.load('collected_data/10000HER_pointMass-v0_Hidden_128l_2expert_obs_.npy').astype('float32')  # Don't include the goal in the obs
 # actions = np.load('collected_data/10000HER_pointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
 
-observations = np.load('collected_data/30000HER_pointMass-v0_Hidden_128l_2expert_obs_.npy').astype(
-    'float32')[:, 0:OBS_GOAL_INDEX]  # Don't include the goal in the obs
-actions = np.load('collected_data/30000HER_pointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
+
+# observations = np.load('collected_data/30000HER_pointMass-v0_Hidden_128l_2expert_obs_.npy').astype(
+#     'float32')
+# actions = np.load('collected_data/30000HER_pointMass-v0_Hidden_128l_2expert_actions.npy').astype('float32')
+
+actions = np.load('collected_data/21000HER_pointMassObject-v0_Hidden_128l_2expert_actions.npy').astype('float32')
+observations= np.load('collected_data/21000HER_pointMassObject-v0_Hidden_128l_2expert_obs_.npy').astype('float32') # Don't include the goal in the obs
+try:
+  extra_info = np.load('collected_data/21000HER_pointMassObject-v0_Hidden_128l_2expert_extra_info.npy', allow_pickle = True).astype('float32')
+except:
+  print('no extra info to load')
 
 
 OBS_DIM = observations.shape[1]
@@ -79,73 +96,6 @@ ACT_DIM = dataloader.ACT_DIM
 
 # Training Step
 
-def train_step(obs, acts, BETA, mask, lengths):
-    with tf.GradientTape() as tape, tf.GradientTape() as planner_tape:
-        # obs and acts are a trajectory, so get intial and goal
-        s_i = obs[:, 0, :]
-
-        range_lens = tf.expand_dims(tf.range(tf.shape(lengths)[0]), 1)
-        expanded_lengths = tf.expand_dims(lengths - 1, 1)  # lengths must be subtracted by 1 to become indices.
-
-        s_g = tf.gather_nd(obs,
-                           tf.concat((range_lens, expanded_lengths), 1))  # get the actual last element of the sequencs.
-        s_g = s_g[:, :ACHIEVED_GOAL_INDEX]
-        # Encode the trajectory
-        mu_enc, s_enc = encoder(obs[:,::2,:], acts[:,::2,:], training=True)
-        encoder_normal = tfd.Normal(mu_enc, s_enc)
-        z = encoder_normal.sample()
-
-        # Produce a plan from the inital and goal state
-        mu_plan, s_plan = planner(s_i, s_g, training=True)
-        planner_normal = tfd.Normal(mu_plan, s_plan)
-        zp = planner_normal.sample()
-
-        lengths = tf.cast(lengths, tf.float32)
-        loss, IMI, KL, info_kl = compute_loss(encoder_normal, z, obs, acts, s_g, BETA, mu_enc, s_enc, mask, lengths,
-                                              planner_normal, mu_plan, s_plan, training=True)
-        # loss_r = IMI  + BETA*info_kl
-        # KL = KL
-        # find and apply gradients with total loss
-
-    actor_vars = [v for v in actor.trainable_variables if 'log_std' not in v.name]
-    gradients = tape.gradient(loss, encoder.trainable_variables + actor_vars + planner.trainable_variables)
-    optimizer.apply_gradients(zip(gradients, encoder.trainable_variables + actor_vars + planner.trainable_variables))
-
-    #     planner_gradients = planner_tape.gradient(KL, planner.trainable_variables)
-    #     planner_optimizer.apply_gradients(zip(planner_gradients, planner.trainable_variables))
-
-    # return values for diagnostics
-    return IMI, KL, info_kl
-
-
-def test_step(obs, acts, mask, lengths, use_planner=True):
-    # obs and acts are a trajectory, so get intial and goal
-    s_i = obs[:, 0, :]
-    range_lens = tf.expand_dims(tf.range(tf.shape(lengths)[0]), 1)
-    expanded_lengths = tf.expand_dims(lengths - 1, 1)  # lengths must be subtracted by 1 to become indices.
-    s_g = tf.gather_nd(obs,
-                       tf.concat((range_lens, expanded_lengths), 1))  # get the actual last element of the sequencs.
-    s_g = s_g[:, :ACHIEVED_GOAL_INDEX]
-
-    # Encode the trajectory
-    mu_enc, s_enc = encoder(obs[:,::2,:], acts[:,::2,:], training=True)
-    encoder_normal = tfd.Normal(mu_enc, s_enc)
-    z = encoder_normal.sample()
-
-    mu_plan, s_plan = planner(s_i, s_g)
-    planner_normal = tfd.Normal(mu_plan, s_plan)
-    zp = planner_normal.sample()
-
-    z = zp  # use the planner for test rollouts
-
-    lengths = tf.cast(lengths, tf.float32)
-    loss, IMI, KL, info_kl = compute_loss(encoder_normal, z, obs, acts, s_g, BETA, mu_enc, s_enc, mask, lengths,
-                                          planner_normal, mu_plan, s_plan, training=True)
-
-    # return values for diagnostics
-    return IMI, KL, info_kl
-
-
 def compute_kernel(x, y):
     x_size = tf.shape(x)[0]
     y_size = tf.shape(y)[0]
@@ -154,13 +104,14 @@ def compute_kernel(x, y):
     tiled_y = tf.tile(tf.reshape(y, tf.stack([1, y_size, dim])), tf.stack([x_size, 1, 1]))
     return tf.exp(-tf.reduce_mean(tf.square(tiled_x - tiled_y), axis=2) / tf.cast(dim, tf.float32))
 
+
 def compute_mmd(x, y):
     x_kernel = compute_kernel(x, x)
     y_kernel = compute_kernel(y, y)
     xy_kernel = compute_kernel(x, y)
     return tf.reduce_mean(x_kernel) + tf.reduce_mean(y_kernel) - 2 * tf.reduce_mean(xy_kernel)
 
-# @title Loss Computation and Model Save/Load
+
 def compute_loss(normal_enc, z, obs, acts, s_g, BETA, mu_enc, s_enc, mask, lengths, normal_plan, mu_plan, s_plan,
                  training=False):
     AVG_SEQ_LEN = obs.shape[1]
@@ -173,9 +124,9 @@ def compute_loss(normal_enc, z, obs, acts, s_g, BETA, mu_enc, s_enc, mask, lengt
                                     axis=0)  # m_enc will batch_size, latent_dim. We want average mean across the batches so we end up with a latent dim size avg_mean_vector. Each dimension of the latent dim should be mean 0 avg across the batch, but individually can be different.
     batch_avg_s = tf.reduce_mean(s_enc, axis=0)
     batch_avg_normal = tfd.Normal(batch_avg_mean, batch_avg_s)
-    # info_kl = tf.reduce_sum(tfd.kl_divergence(batch_avg_normal, std_normal))
+    info_kl = tf.reduce_sum(tfd.kl_divergence(batch_avg_normal, std_normal))
 
-    info_kl = compute_mmd(true_samples, normal_enc.sample())
+    # info_kl = compute_mmd(true_samples, normal_enc.sample() )
 
     # reverse
     KL = tf.reduce_sum(tfd.kl_divergence(normal_enc, normal_plan)) / CURR_BATCH_SIZE
@@ -191,17 +142,17 @@ def compute_loss(normal_enc, z, obs, acts, s_g, BETA, mu_enc, s_enc, mask, lengt
 
     mu, _, _, _, pdf = actor(obs, z, s_g, training=training)
 
-    #     log_prob_actions = -pdf.log_prob(acts[:,:,:ACT_DIM]) # batchsize, Maxseqlen, actions,
+    # log_prob_actions = -pdf.log_prob(acts[:,:,:ACT_DIM]) # batchsize, Maxseqlen, actions, I guess go up to act dim because when we have a gripper keep a separate
 
-    #     masked_log_probs = log_prob_actions*mask[:,:,:ACT_DIM] # should zero out all masked elements.
-    #     avg_batch_wise_sum = tf.reduce_sum(masked_log_probs, axis = (1,2)) / lengths
-    #     IMI = tf.reduce_mean(avg_batch_wise_sum) / AVG_SEQ_LEN / CURR_BATCH_SIZE
+    # masked_log_probs = log_prob_actions*mask[:,:,:ACT_DIM] # should zero out all masked elements.
+    # avg_batch_wise_sum = tf.reduce_sum(masked_log_probs, axis = (1,2)) / lengths
+    # IMI = tf.reduce_mean(avg_batch_wise_sum) / AVG_SEQ_LEN / CURR_BATCH_SIZE
 
     # mu will be B,T,A. Acts B,T,A. Mask is also B,T,A.
 
     IMI = tf.reduce_mean(tf.losses.MAE(mu * mask, acts * mask))
 
-    loss = IMI + BETA * KL  # +BETA*info_kl +  # #
+    loss = IMI + BETA * KL  # BETA*info_kl + # #
     return loss, IMI, KL, info_kl
 
 
@@ -215,7 +166,7 @@ def BC_train_step(obs, acts, BETA, mask, lengths, optimizer, actor):
 
         s_g = tf.gather_nd(obs,
                            tf.concat((range_lens, expanded_lengths), 1))  # get the actual last element of the sequencs.
-        s_g = s_g[:, :ACHIEVED_GOAL_INDEX]
+        s_g = s_g[:, AG_IDXS[0]:AG_IDXS[1]]
         # Encode the trajectory
         mu_enc, s_enc = encoder(obs[:,::2,:], acts[:,::2,:], training=True)
         encoder_normal = tfd.Normal(mu_enc, s_enc)
@@ -388,22 +339,25 @@ class LatentHERReplayBuffer:
         raise NotImplementedError
 
 
-def sample_expert_trajectory(train_set, encoder):
-    obs, acts, mask, lengths = train_set.next()
-    s_i = obs[:, 0, :]
-    range_lens = tf.expand_dims(tf.range(tf.shape(lengths)[0]), 1)
-    expanded_lengths = tf.expand_dims(lengths - 1, 1)  # lengths must be subtracted by 1 to become indices.
+def sample_expert_trajectory(indexes, encoder):
+    idx = np.random.randint(indexes[0],indexes[1])
+    length = np.random.randint(MIN_SEQ_LEN,MAX_SEQ_LEN)
+    trajectory_obs, trajectory_acts = np.expand_dims(observations[idx:idx + length], 0), np.expand_dims(
+        actions[idx:idx + length], 0)
+    if extra_info is None:
+        ext_inf = None
+    else:
+        ext_inf = extra_info[idx]
 
-    s_g = tf.gather_nd(obs,
-                       tf.concat((range_lens, expanded_lengths), 1))  # get the actual last element of the sequencs.
-    s_g = s_g[:, :ACHIEVED_GOAL_INDEX]
-    # Encode the trajectory
-    # TODO fix this - Fix what? Damn you past Sholto
-    mu_enc, s_enc = encoder(obs[:,::2,:], acts[:,::2,:], training=True)
+    mu_enc, s_enc = encoder(trajectory_obs[:, ::2, :], trajectory_acts[:, ::2, :])
     encoder_normal = tfd.Normal(mu_enc, s_enc)
-    z = encoder_normal.sample()
+    z =tf.squeeze(encoder_normal.sample()) # tf.squeeze(mu_enc)  #
+    s_g = tf.squeeze(trajectory_obs[:, -1, AG_IDXS[0]:AG_IDXS[1]])
+    s_i = tf.squeeze(trajectory_obs[:, 0, :])
 
-    return s_i, z, s_g, obs, acts, mu_enc, lengths
+
+
+    return s_i, z, s_g, trajectory_obs, trajectory_acts, tf.squeeze(mu_enc), length, ext_inf
 
 
 def log_metrics(summary_writer, current_total_steps, episodes, obs, acts, z, length, encoder=None, train=True, latent = False):
@@ -437,32 +391,38 @@ def log_metrics(summary_writer, current_total_steps, episodes, obs, acts, z, len
 # decoder = VAE_Decoder(MAX_SEQ_LEN, ACHIEVED_GOAL_INDEX)
 # encoder, decoder = MLP_OBS_load_weights(extension, BATCH_SIZE, MAX_SEQ_LEN, OBS_DIM, ACT_DIM,ACHIEVED_GOAL_INDEX, LATENT_DIM, encoder, decoder)
 
-extension = 'saved_models/Z_learning_0.005enc2plan6'
+extension = 'saved_models/Z_learning_0.001LSTM_LFP_MSE12'
 
 encoder = TRAJECTORY_ENCODER_LSTM(LAYER_SIZE, LATENT_DIM, P_DROPOUT)
-actor = ACTOR(LAYER_SIZE, ACT_DIM, P_DROPOUT)
+#actor = ACTOR(LAYER_SIZE, ACT_DIM, P_DROPOUT)
+actor = LSTM_ACTOR(LAYER_SIZE, ACT_DIM, P_DROPOUT)
 planner = PLANNER(LAYER_SIZE, LATENT_DIM, P_DROPOUT)
-encoder, actor, planner = load_weights(extension, 8, MAX_SEQ_LEN, OBS_DIM, ACT_DIM,ACHIEVED_GOAL_INDEX, LATENT_DIM,  encoder, actor, planner)
+encoder, actor, planner = load_weights(extension, 8, MAX_SEQ_LEN, OBS_DIM, ACT_DIM,AG_IDXS, LATENT_DIM,  encoder, actor, planner)
+
 
 #
 # This is our training loop.
 def training_loop(env_fn,  ac_kwargs=dict(), seed=0, 
-        steps_per_epoch=2000, epochs=100, replay_size=int(1e6), gamma=0.99, 
+        steps_per_epoch=2000, epochs=100, replay_size=int(1e6), gamma=0.99,
         polyak=0.995, lr=1e-3, alpha=0.2, batch_size=100, start_steps=3000, 
         max_ep_len=1000, save_freq=1, load = False, exp_name = "Experiment_1", render = False, strategy = 'future'):
     
   tf.random.set_seed(seed)
   np.random.seed(seed)
-  env, test_env = env_fn(), env_fn()
-  try:
-    env.set_sparse_reward()
-  except:
-      print('Env already uses sparse rewards.')
+  test_env = env_fn()
 
-  hindsight_encoder = None #encoder # None # turn off encoder, just have reward based on if it reaches the goal, like normal HER.
-  latent =  True
-  lstm_actor = actor.get_deterministic_action # a basline latent trained LSTM policy which can act as a baselien with which to sum the actions of our RL policy.
+  env = env_fn()
+  # pybullet needs the GUI env to be reset first for our noncollision stuff to work.
+  if render:
+      print('Rendering Test Rollouts')
+      test_env.render(mode='human')
+  test_env.reset()
 
+  #changes I made are the next three lines.
+  hindsight_encoder =  None # encoder #turn off encoder, just have reward based on if it reaches the goal, like normal HER.
+  latent =  False #True
+  lstm_actor = None# actor.get_deterministic_action # a basline latent trained LSTM policy which can act as a baselien with which to sum the actions of our RL policy.
+  only_use_baseline = False
 
   in_dim = env.observation_space.spaces['observation'].shape[0] + env.observation_space.spaces['desired_goal'].shape[0]
   act_dim = env.action_space.shape[0]
@@ -509,16 +469,17 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
   train_set = iter(dataset.shuffle(valid_len).batch(sample_size).repeat(EPOCHS))
   BC_set = iter(dataset.shuffle(valid_len).batch(BATCH_SIZE).repeat(EPOCHS))
   # sample a bunch of expert trajectories to try to imitate
-  s_i, z, s_g, obs, acts, _, lengths = sample_expert_trajectory(train_set, encoder)
-  for r in range(sample_size):
-      trajectory = z[r] if latent else None
-      episodes, steps = rollout_trajectories(n_steps=max_ep_len, z = trajectory, env=env, max_ep_len=lengths[r], actor=SAC.actor.get_stochastic_action,
-                                             start_state=s_i[r], s_g = s_g[r], exp_name=exp_name, return_episode=True,goal_based=True,
-                                             current_total_steps=int(steps_collected), summary_writer = summary_writer, lstm_actor = lstm_actor)
 
-      steps_collected += steps
+  for r in range(sample_size):
+      s_i, z, s_g, obs, acts, _, lengths, extra_info = sample_expert_trajectory([0, train_len], encoder)
+      trajectory = z if latent else None
+      result = rollout_trajectories(n_steps=max_ep_len, z = trajectory, env=env, max_ep_len=lengths, actor=SAC.actor.get_stochastic_action,
+                                             start_state=s_i, s_g = s_g, only_use_baseline = only_use_baseline,  exp_name=exp_name, return_episode=True,goal_based=True,
+                                             current_total_steps=int(steps_collected), summary_writer = summary_writer, lstm_actor = lstm_actor, extra_info = extra_info)
+      episodes, n_steps = result['episodes'], result['n_steps']
+      steps_collected += n_steps
       [replay_buffer.store_hindsight_episode(episode, encoder = hindsight_encoder, latent = latent, baseline_actor = lstm_actor ) for episode in episodes]
-      log_metrics(summary_writer, steps_collected, episodes, obs[r], acts[r], trajectory, lengths[r], encoder, latent = latent)
+      log_metrics(summary_writer, steps_collected, episodes, obs, acts, trajectory, lengths, hindsight_encoder, latent = latent)
 
 
   # now update after
@@ -530,31 +491,32 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
 
   # now act with our actor, and alternately collect data, then train.
   while steps_collected < total_steps:
-    s_i, z, s_g, obs, acts, _, lengths = sample_expert_trajectory(train_set, encoder)
-    trajectory = z[0] if latent else None
+    s_i, z, s_g, obs, acts, _, lengths, extra_info = sample_expert_trajectory([0,train_len], encoder)
+    trajectory = z if latent else None
     # collect an episode
-    episodes, steps = rollout_trajectories(n_steps=max_ep_len, z = trajectory, env=env, max_ep_len=lengths[0],actor=SAC.actor.get_stochastic_action,
-                                           start_state = s_i[0], s_g= s_g[0],current_total_steps=int(steps_collected), exp_name=exp_name,
-                                           return_episode=True, goal_based=True, summary_writer = summary_writer,lstm_actor = lstm_actor)
-    steps_collected += steps
+    result = rollout_trajectories(n_steps=max_ep_len, z = trajectory, env=env, max_ep_len=lengths,actor=SAC.actor.get_stochastic_action,
+                                           start_state = s_i, s_g= s_g, only_use_baseline = only_use_baseline, current_total_steps=int(steps_collected), exp_name=exp_name,
+                                           return_episode=True, goal_based=True, summary_writer = summary_writer,lstm_actor = lstm_actor, extra_info =extra_info)
+    episodes, n_steps = result['episodes'], result['n_steps']
+    steps_collected += n_steps
     # take than many training steps
     [replay_buffer.store_hindsight_episode(episode, encoder = hindsight_encoder, latent = latent, baseline_actor = lstm_actor) for episode in episodes]
-    update_models(SAC, replay_buffer, steps = steps, batch_size = batch_size, bc_set = BC_set, actor = SAC.actor, collected_steps=steps_collected, summary_writer=summary_writer)
-    log_metrics(summary_writer, steps_collected, episodes, obs[0], acts[0], trajectory,lengths[0], encoder, latent = latent)
+    update_models(SAC, replay_buffer, steps = n_steps, batch_size = batch_size, bc_set = BC_set, actor = SAC.actor, collected_steps=steps_collected, summary_writer=summary_writer)
+    log_metrics(summary_writer, steps_collected, episodes, obs, acts, trajectory,lengths, hindsight_encoder, latent = latent)
     #log_metrics(summary_writer, steps_collected, episodes, obs[0], acts[0], lengths[0], z = None,encoder = hindsight_encoder)
 
     # if an epoch has elapsed, save and test.
     if steps_collected >= epoch_ticker:
         SAC.save_weights()
-        for i in range(0,10):
-          s_i, _, s_g, obs, acts, mu_z, lengths = sample_expert_trajectory(train_set, encoder)
-          trajectory = mu_z[0] if latent else None
-          episodes, steps = rollout_trajectories(n_steps=lengths[0], z = trajectory, env=test_env, max_ep_len=lengths[0],
-                                                 actor=SAC.actor.get_deterministic_action,start_state = s_i[0], s_g=s_g[0],
+        for i in range(0,5):
+          s_i, _, s_g, obs, acts, mu_z, lengths, extra_info = sample_expert_trajectory([train_len,train_len+valid_len], encoder)
+          trajectory = mu_z if latent else None
+          result = rollout_trajectories(n_steps=lengths, z = trajectory, env=test_env, max_ep_len=lengths,
+                                                 actor=SAC.actor.get_deterministic_action, only_use_baseline = only_use_baseline,start_state = s_i, s_g=s_g,
                                                  current_total_steps=int(steps_collected), exp_name=exp_name,return_episode=True,
-                                                 goal_based=True, train = False, render = True, summary_writer = summary_writer, lstm_actor = lstm_actor)
-
-          log_metrics(summary_writer, steps_collected, episodes, obs[0], acts[0], trajectory,lengths[0], encoder, latent = latent)
+                                                 goal_based=True, train = False, render = True, summary_writer = summary_writer, lstm_actor = lstm_actor, extra_info = extra_info)
+          episodes, n_steps = result['episodes'], result['n_steps']
+          log_metrics(summary_writer, steps_collected, episodes, obs, acts, trajectory,lengths, hindsight_encoder, latent = latent)
         # Test the performance of the deterministic version of the agent.
         #rollout_trajectories(n_steps = max_ep_len*10,env = test_env, max_ep_len = max_ep_len, actor = SAC.actor.get_deterministic_action, summary_writer=summary_writer, current_total_steps = steps_collected, train = False, render = True, exp_name = exp_name, return_episode = True, goal_based = True)
         epoch_ticker += steps_per_epoch
@@ -574,12 +536,12 @@ if __name__ == '__main__':
     parser.add_argument('--max_ep_len', type=int, default=200)
     parser.add_argument('--exp_name', type=str, default='experiment_1')
     parser.add_argument('--load', type=bool, default=False)
-    parser.add_argument('--render', type=bool, default=False)
+    parser.add_argument('--render', type=bool, default=True)
     parser.add_argument('--strategy', type=str, default='future')
 
     args = parser.parse_args()
 
-    experiment_name = 'HLIL_' + args.env + '_Hidden_' + str(args.hid) + 'l_' + str(args.l)
+    experiment_name = 'HLIL_nobaseline' + args.env + '_Hidden_' + str(args.hid) + 'l_' + str(args.l)
 
     training_loop(lambda: gym.make(args.env),
                   ac_kwargs=dict(hidden_sizes=[args.hid] * args.l),
