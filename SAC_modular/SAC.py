@@ -283,8 +283,24 @@ class SAC_model():
   
   
 
+  def get_weights(self):
+      weights = []
+      for name, model in self.models.items():
+          weights.append([np.expand_dims(n.numpy(), axis = 0) for n in model.trainable_variables]) # must return the numpy in order for ray to work.
+      return weights
 
-  
+  def set_weights(self, weights):
+      # assign weights.
+      for i, (name, model) in enumerate(self.models.items()):
+          for distrib, master in zip(model.trainable_variables, weights[i]):
+              tf.compat.v1.assign(distrib, np.squeeze(master, axis = 0))
+      #update target to match
+      for v_main, v_targ in zip(self.value.trainable_variables, self.value_targ.trainable_variables):
+          tf.compat.v1.assign(v_targ, v_main)
+
+
+
+
   def load_weights(self, path = 'saved_models/'):
     try:
       print('Loading in network weights...')
