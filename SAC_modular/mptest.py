@@ -10,6 +10,7 @@ from SAC import *
 import copy
 import psutil
 import ray
+import os
 
 # TODO Answer why reward scaling makes such a damn difference?
 
@@ -135,6 +136,15 @@ class HERReplayBuffer:
 @ray.remote
 class env_process():
     def __init__(self, kwargs):
+        # Tell numpy to only use one core. If we don't do this, each actor may try
+        # to use all of the cores and the resulting contention may result in no
+        # speedup over the serial version. Note that if numpy is using OpenBLAS,
+        # then you need to set OPENBLAS_NUM_THREADS=1, and you probably need to do
+        # it from the command line (so it happens before numpy is imported).
+        import gym
+        import pointMass
+        import tensorflow as tf
+        os.environ["MKL_NUM_THREADS"] = "1"
         self.env = kwargs['env_fn']()
         self.exp_name =  kwargs['exp_name']
         self.max_ep_len = kwargs['max_ep_len']
@@ -205,6 +215,15 @@ def average_weights(weights):
     return models
 
 
+# Our actor
+@ray.remote
+class Sleeper(object):
+    def __init__(self):
+        self.sleepValue = 0.5
+
+    # Equivalent to func(), but defined within an actor
+    def actor_func(self):
+        time.sleep(self.sleepValue)
 
 # This is our training loop.
 def training_loop(env_fn, ac_kwargs=dict(), seed=0,
@@ -216,7 +235,8 @@ def training_loop(env_fn, ac_kwargs=dict(), seed=0,
     np.random.seed(seed)
 
     test_env = env_fn()
-    num_cpus = 1#psutil.cpu_count(logical=False)
+    print(test_env)
+    num_cpus = psutil.cpu_count(logical=False)
     env = env_fn()
     # pybullet needs the GUI env to be reset first for our noncollision stuff to work.
     if render:
@@ -224,6 +244,8 @@ def training_loop(env_fn, ac_kwargs=dict(), seed=0,
         test_env.render(mode='human')
     test_env.reset()
     ray.init()
+
+
 
     # Get Env dimensions
     obs_dim = env.observation_space.spaces['observation'].shape[0] + env.observation_space.spaces['desired_goal'].shape[0]
@@ -239,6 +261,7 @@ def training_loop(env_fn, ac_kwargs=dict(), seed=0,
         k['proc_id'] = i
         params_list.append(k)
 
+
     agents  = [env_process.remote(k) for k in params_list]
     print('Created Actors')
 
@@ -248,6 +271,30 @@ def training_loop(env_fn, ac_kwargs=dict(), seed=0,
 
     [agent.set_weights.remote(master_weights) for agent in agents] # set the weights on our distributed actors.
     print('Set Weights of Distributed Actors.')
+
+    # test time of stuff
+    # double_o = env_process.remote(params_list[0])
+    #
+    # t = time.time()
+    # five_results = []
+    # for i in range(num_cpus):
+    #     five_results.append(double_o.init_buffer_with_random_actions.remote())
+    #
+    # # Wait until the end to call ray.get()
+    # ray.get(five_results)
+    # print('Time test took:',str(time.time()-t))
+    #
+    #
+    #
+    # t = time.time()
+    # # Each call to actor_func now goes to a different Sleeper
+    # five_results = []
+    # for agent in agents:
+    #     five_results.append(agent.init_buffer_with_random_actions.remote())
+    #
+    # ray.get(five_results)
+    # print('Time test took:',str(time.time()-t))
+
 
     # Logging
     start_time = time.time()
@@ -260,8 +307,8 @@ def training_loop(env_fn, ac_kwargs=dict(), seed=0,
 
     if not load:
         # collect some initial random steps to initialise
-        steps = [ray.get(agent.init_buffer_with_random_actions.remote()) for agent in agents]
-
+        runs = [agent.init_buffer_with_random_actions.remote() for agent in agents]
+        steps = [ray.get(run) for run in runs]
         weights = [ray.get(agent.get_weights.remote()) for agent in agents]
         #average them
         avg_weights = average_weights(weights)
@@ -274,8 +321,8 @@ def training_loop(env_fn, ac_kwargs=dict(), seed=0,
     while steps_collected < total_steps:
         # collect an episode
 
-        steps = [ray.get(agent.rollout_episode.remote()) for agent in agents]
-
+        runs = [agent.rollout_episode.remote() for agent in agents]
+        steps = [ray.get(run) for run in runs] # separate the get from the run so its non blocking.
         weights = [ray.get(agent.get_weights.remote()) for agent in agents]
         # average them
         avg_weights = average_weights(weights)
@@ -319,12 +366,3 @@ if __name__ == '__main__':
                   ac_kwargs=dict(hidden_sizes=[args.hid] * args.l),
                   gamma=args.gamma, seed=args.seed, epochs=args.epochs, load=args.load, exp_name=experiment_name,
                   max_ep_len=args.max_ep_len, render=True, strategy=args.strategy)
-
-
-
-
-
-
-
-
-

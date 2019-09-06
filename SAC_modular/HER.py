@@ -23,11 +23,11 @@ import multiprocessing as mp
 # Agree with the stable baselines guys, HER is best implemented as a wrapper on the replay buffer.
 
 
-# this is what we're working with at the moment. 
+# this is what we're working with at the moment.
 
 # transitions arrive as -  obs, act, rew, next_obs, done
-# but in HER, we need entire episodes. 
-# Ok, so one function for store episode, and that stores a bunch of transitions, either with strategy future or final. 
+# but in HER, we need entire episodes.
+# Ok, so one function for store episode, and that stores a bunch of transitions, either with strategy future or final.
 # yeah so instead of storing transitions, store episdoes. Done? Then sample transitons the same way.
 # how do we handle obs? take it as a dict at the ep stage, then when we're sampling for SAC .. flattened? Reward the same
 # yeah. I reckon.
@@ -144,17 +144,19 @@ class HERReplayBuffer:
 
 
 # This is our training loop.
-def training_loop(env_fn,  ac_kwargs=dict(), seed=0, 
+def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
         steps_per_epoch=2000, epochs=100, replay_size=int(1e6), gamma=0.99,
         polyak=0.995, lr=1e-3, alpha=0.2, batch_size=100, start_steps=3000,
         max_ep_len=300, save_freq=1, load = False, exp_name = "Experiment_1", render = False, strategy = 'future', num_cpus = 'max'):
-    
+
+  print('Begin')
   tf.random.set_seed(seed)
   np.random.seed(seed)
 
 
-
+  print('Pretestenv')
   test_env = env_fn()
+  print('test_env-',test_env)
   num_cpus = psutil.cpu_count(logical=False)
   env = env_fn()
   #pybullet needs the GUI env to be reset first for our noncollision stuff to work.
@@ -170,9 +172,9 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
   SAC = SAC_model(env, obs_dim, act_dim, ac_kwargs['hidden_sizes'],lr, gamma, alpha, polyak,  load, exp_name)
   # Experience buffer
   replay_buffer = HERReplayBuffer(env, obs_dim, act_dim, replay_size, n_sampled_goal = 4, goal_selection_strategy = strategy)
-  
-  
-  #Logging 
+
+
+  #Logging
   start_time = time.time()
   train_log_dir = 'logs/' + exp_name+str(int(start_time))
   summary_writer = tf.summary.create_file_writer(train_log_dir)
@@ -239,25 +241,6 @@ if __name__ == '__main__':
 
     experiment_name = 'HER2_'+args.env+'_Hidden_'+str(args.hid)+'l_'+str(args.l)
 
-    training_loop(lambda : gym.make(args.env), 
+    training_loop(lambda : gym.make(args.env),
       ac_kwargs=dict(hidden_sizes=[args.hid]*args.l),
       gamma=args.gamma, seed=args.seed, epochs=args.epochs, load = args.load, exp_name = experiment_name, max_ep_len = args.max_ep_len, render = True, strategy = args.strategy)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
