@@ -12,6 +12,8 @@ from SAC import *
 import copy
 import psutil
 import multiprocessing as mp
+from tqdm import tqdm
+from natsort import natsorted, ns
 
 #TODO Answer why reward scaling makes such a damn difference?
 
@@ -137,9 +139,36 @@ class HERReplayBuffer:
 
 
 
+def sample_curriculum(observations):
+    index= np.random.randint(0,len(observations)-51)
+    length = np.random.randint(10, 50)
+    s_i = observations[index]
+    s_g = observations[index+length][19:22] #only on UR5 at the moment
+    return s_i, s_g
 
+path= '../../ur5_RL/ur5_RL/envs/play_data/set_9'
 
+# collect all file paths
+moments = [x[0] for x in os.walk(path)][1:]
+# sort them according to timestamp
+moments = natsorted(moments, alg=ns.IGNORECASE)
 
+def load_data_into_memory(moments):
+
+    observations = []
+    actions  = []
+    imgs = []
+
+    for s in tqdm(moments):
+        act = np.load(s+'/act.npy')
+        actions.append(act)
+        obs = np.load(s+'/obs.npy')
+        observations.append(obs)
+        
+        
+    return np.array(observations).astype(float), np.array(actions).astype(float)
+
+observations, actions = load_data_into_memory(moments)
 
 
 
@@ -186,9 +215,13 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
   total_steps = steps_per_epoch * epochs
   steps_collected = 0
 
+  s_i, s_g = None, None
+  curriculum_learn = True
   if not load:
   # collect some initial random steps to initialise
-    episodes = rollout_trajectories(n_steps = start_steps,env = env, max_ep_len = max_ep_len, actor = 'random', summary_writer = summary_writer, exp_name = exp_name, return_episode = True, goal_based = True)
+    if curriculum_learn:
+        s_i, s_g = sample_curriculum(observations)
+    episodes = rollout_trajectories(n_steps = start_steps,env = env, start_state=s_i,max_ep_len = max_ep_len, actor = 'random', summary_writer = summary_writer, exp_name = exp_name, return_episode = True, goal_based = True)
     steps_collected += episodes['n_steps']
     [replay_buffer.store_hindsight_episode(e) for e in episodes['episodes']]
   # episodes, steps  = rollout_trajectories(n_steps = start_steps,env = env, max_ep_len = max_ep_len, actor = 'random', summary_writer = summary_writer, exp_name = exp_name, return_episode = True, goal_based = True)
@@ -204,7 +237,9 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
 
     # # take than many training steps
     # [replay_buffer.store_hindsight_episode(episode) for episode in episodes]
-    episodes = rollout_trajectories(n_steps = max_ep_len,env = env, max_ep_len = max_ep_len, actor = SAC.actor.get_stochastic_action, summary_writer=summary_writer, current_total_steps = steps_collected, exp_name = exp_name, return_episode = True, goal_based = True)
+    if curriculum_learn:
+        s_i, s_g = sample_curriculum(observations)
+    episodes = rollout_trajectories(n_steps = max_ep_len,env = env,start_state=s_i, max_ep_len = max_ep_len, actor = SAC.actor.get_stochastic_action, summary_writer=summary_writer, current_total_steps = steps_collected, exp_name = exp_name, return_episode = True, goal_based = True)
     steps_collected += episodes['n_steps']
     [replay_buffer.store_hindsight_episode(e) for e in episodes['episodes']]
 
@@ -214,7 +249,12 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
     if steps_collected  > 0 and steps_collected  % steps_per_epoch == 0:
         SAC.save_weights()
         # Test the performance of the deterministic version of the agent.
-        rollout_trajectories(n_steps = max_ep_len*5,env = test_env, max_ep_len = max_ep_len, actor = SAC.actor.get_deterministic_action, summary_writer=summary_writer, current_total_steps = steps_collected, train = False, render = render, exp_name = exp_name, return_episode = True, goal_based = True)
+        if curriculum_learn:
+            for i in range(0,5):
+                s_i, s_g = sample_curriculum(observations)
+                rollout_trajectories(n_steps = max_ep_len,env = test_env, start_state=s_i,max_ep_len = max_ep_len, actor = SAC.actor.get_deterministic_action, summary_writer=summary_writer, current_total_steps = steps_collected, train = False, render = render, exp_name = exp_name, return_episode = True, goal_based = True)
+        else:
+            rollout_trajectories(n_steps = max_ep_len*5,env = test_env, max_ep_len = max_ep_len, actor = SAC.actor.get_deterministic_action, summary_writer=summary_writer, current_total_steps = steps_collected, train = False, render = render, exp_name = exp_name, return_episode = True, goal_based = True)
 
 
 
@@ -228,7 +268,7 @@ if __name__ == '__main__':
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--seed', '-s', type=int, default=0)
     parser.add_argument('--epochs', type=int, default=1500)
-    parser.add_argument('--max_ep_len', type=int, default=200) # fetch reach learns amazingly if 50, but not if 200 -why?
+    parser.add_argument('--max_ep_len', type=int, default=400) # fetch reach learns amazingly if 50, but not if 200 -why?
     parser.add_argument('--exp_name', type=str, default='experiment_1')
     parser.add_argument('--load', type=bool, default=False)
     parser.add_argument('--render', type=bool, default=False)

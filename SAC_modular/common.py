@@ -61,15 +61,14 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
 
     # reset the environment
     def set_init(o, env, extra_info):
-        if 'point' in exp_name:
-            if extra_info is not None:
 
-                env.initialize_start_pos(start_state, extra_info)
-            else:
-                env.initialize_start_pos(start_state)  # init vel to 0, but x and y to the desired pos.
-            o['observation'] = start_state
+        if extra_info is not None:
+
+            env.initialize_start_pos(start_state, extra_info)
         else:
-            raise NotImplementedError
+            env.initialize_start_pos(start_state)  # init vel to 0, but x and y to the desired pos.
+        o['observation'] = start_state
+
 
         return o
 
