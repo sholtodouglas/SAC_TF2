@@ -216,21 +216,32 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
   # now collect epsiodes
   total_steps = steps_per_epoch * epochs
   steps_collected = 0
+  epoch_ticker = 0
 
   s_i, s_g = None, None
-  curriculum_learn = True
+  curriculum_learn = False
   if not load:
   # collect some initial random steps to initialise
     if curriculum_learn:
-        s_i, s_g = sample_curriculum(observations)
-    episodes = rollout_trajectories(n_steps = start_steps,env = env, start_state=s_i,max_ep_len = max_ep_len, actor = 'random', summary_writer = summary_writer, exp_name = exp_name, return_episode = True, goal_based = True)
-    steps_collected += episodes['n_steps']
-    [replay_buffer.store_hindsight_episode(e) for e in episodes['episodes']]
+        
+        for i in range(0,20):
+            s_i, s_g = sample_curriculum(observations)
+            # lots of short episodes, the intention is to get lots of different exposure to object interaction states
+            episodes = rollout_trajectories(n_steps = max_ep_len//4,env = env, start_state=s_i,max_ep_len = max_ep_len//4, actor = 'random', summary_writer = summary_writer, exp_name = exp_name, return_episode = True, goal_based = True)
+            steps_collected += episodes['n_steps']
+            [replay_buffer.store_hindsight_episode(e) for e in episodes['episodes']]
+
+    else:
+        episodes = rollout_trajectories(n_steps = start_steps,env = env, start_state=s_i,max_ep_len = max_ep_len, actor = 'random', summary_writer = summary_writer, exp_name = exp_name, return_episode = True, goal_based = True)
+        steps_collected += episodes['n_steps']
+        [replay_buffer.store_hindsight_episode(e) for e in episodes['episodes']]
   # episodes, steps  = rollout_trajectories(n_steps = start_steps,env = env, max_ep_len = max_ep_len, actor = 'random', summary_writer = summary_writer, exp_name = exp_name, return_episode = True, goal_based = True)
     # steps_collected += steps
     # [replay_buffer.store_hindsight_episode(episode) for episode in episodes]
     update_models(SAC, replay_buffer, steps = steps_collected, batch_size = batch_size)
 
+
+  
   # now act with our actor, and alternately collect data, then train.
   while steps_collected < total_steps:
     # collect an episode
@@ -248,7 +259,7 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
     update_models(SAC, replay_buffer, steps = max_ep_len, batch_size = batch_size)
 
     # if an epoch has elapsed, save and test.
-    if steps_collected  > 0 and steps_collected  % steps_per_epoch == 0:
+    if steps_collected >= epoch_ticker:
         SAC.save_weights()
         # Test the performance of the deterministic version of the agent.
         if curriculum_learn:
@@ -257,7 +268,7 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
                 rollout_trajectories(n_steps = max_ep_len,env = test_env, start_state=s_i,max_ep_len = max_ep_len, actor = SAC.actor.get_deterministic_action, summary_writer=summary_writer, current_total_steps = steps_collected, train = False, render = render, exp_name = exp_name, return_episode = True, goal_based = True)
         else:
             rollout_trajectories(n_steps = max_ep_len*5,env = test_env, max_ep_len = max_ep_len, actor = SAC.actor.get_deterministic_action, summary_writer=summary_writer, current_total_steps = steps_collected, train = False, render = render, exp_name = exp_name, return_episode = True, goal_based = True)
-
+        epoch_ticker += steps_per_epoch
 
 
 

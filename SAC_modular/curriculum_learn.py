@@ -44,8 +44,9 @@ def load_data_into_memory(moments):
 observations, actions = load_data_into_memory(moments)
 
 while(1):
+	env.reset()
 	index= np.random.randint(0,len(observations))
 	env.initialize_start_pos(observations[index])
-	env.reset_goal_pos(observations[index+50][19:22])
+	#env.reset_goal_pos(observations[index+50][19:22])
 	time.sleep(0.5)
 	pass
