@@ -8,7 +8,7 @@ from gym import wrappers
 
 flatten = False
 ENV_NAME = 'pointMassObject-v0'#'reacher2D-v0'
-#ENV_NAME = 'ur5_RL_relative-v0'
+ENV_NAME = 'ur5_RL_relative-v0'
 #ENV_NAME = 'ur5_RL-v0'
 #ENV_NAME = 'Pendulum-v0'
 env = gym.make(ENV_NAME)
@@ -38,7 +38,7 @@ if experiment_name == 'HER2_pointMassObject-v0_Hidden_128l_2':
 
 SAC = SAC_model(env, obs_dim, act_dim, [128,128],load = True, exp_name = experiment_name)
 n_steps = 30000
-episodes = rollout_trajectories(n_steps = n_steps,env = env, max_ep_len = n_steps,goal_based = not flatten, actor = SAC.actor.get_deterministic_action, train = False, render = True, exp_name = experiment_name, return_episode = True)
+episodes = rollout_trajectories(n_steps = n_steps,env = env, max_ep_len = 30,goal_based = not flatten, actor = SAC.actor.get_deterministic_action, train = False, render = True, exp_name = experiment_name, return_episode = True)
 
 action_buff = []
 observation_buff = []

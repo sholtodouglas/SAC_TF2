@@ -61,15 +61,14 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
 
     # reset the environment
     def set_init(o, env, extra_info):
-        if 'point' in exp_name:
-            if extra_info is not None:
 
-                env.initialize_start_pos(start_state, extra_info)
-            else:
-                env.initialize_start_pos(start_state)  # init vel to 0, but x and y to the desired pos.
-            o['observation'] = start_state
+        if extra_info is not None:
+
+            env.initialize_start_pos(start_state, extra_info)
         else:
-            raise NotImplementedError
+            env.initialize_start_pos(start_state)  # init vel to 0, but x and y to the desired pos.
+        o['observation'] = start_state
+
 
         return o
 
@@ -137,7 +136,8 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
 
             a = actor(o)
         # Step the env
-
+        # if not train:
+        #     print(list(a.numpy()),',')
         if lstm_actor is not None and only_use_baseline is False:
             o2, r, d, _ = env.step(
                 a + a_base)  # final action is the sum of the baseline, and the adjustment by our RL learnt actor.
@@ -145,6 +145,7 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
         else:
 
             o2, r, d, _ = env.step(a)
+
 
         #       if z_learning: # need to include z and s_g in the obs for the replay buffer
         #         o2 = np.concatenate([o2['observation'],z,o2['desired_goal']], axis = 0)
