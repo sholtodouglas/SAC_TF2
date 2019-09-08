@@ -11,7 +11,7 @@ ENV_NAME = 'pointMassObject-v0'#'reacher2D-v0'
 #ENV_NAME = 'ur5_RL_relative-v0'
 #ENV_NAME = 'ur5_RL-v0'
 #ENV_NAME = 'Pendulum-v0'
-env = gym.make(ENV_NAME) 
+env = gym.make(ENV_NAME)
 env.activate_roving_goal()
 if flatten:
 	env = wrappers.FlattenDictWrapper(env, dict_keys=['observation', 'desired_goal'])
@@ -24,9 +24,9 @@ act_dim = env.action_space.shape[0]
 #experiment_name = 'pos_cntrl_seg_reacher2D-v0_Hidden_128l_2'
 #experiment_name = 'pos_cntrl_exp_pointMass-v0_Hidden_128l_2'
 #experiment_name = 'no_reset_vel_pointMass-v0_Hidden_128l_2'
-experiment_name = 'HER_pointMassObject-v0_Hidden_128l_2'
+experiment_name = 'HER2_pointMassObject-v0_Hidden_128l_2'
 extra_info = False
-if experiment_name == 'HER_pointMassObject-v0_Hidden_128l_2':
+if experiment_name == 'HER2_pointMassObject-v0_Hidden_128l_2':
 	extra_info = True
 #experiment_name ='HER_ur5_RL_relative-v0_Hidden_128l_2'
 #experiment_name ='HER_ur5_RL-v0_Hidden_128l_2'
@@ -61,8 +61,8 @@ np.save('collected_data/'+str(n_steps)+experiment_name+'expert_obs_',np.concaten
 # if train encoder z = enc(T) - train with policy reco loss.
 # then we can do trajectory based GAIL
 # f(T|Z)
-# but then we need something picking a desired z. 
-# hindsight wise with a batch - okay you made this trajectory, well with that z then thats expert. 
+# but then we need something picking a desired z.
+# hindsight wise with a batch - okay you made this trajectory, well with that z then thats expert.
 # could we do play data in GAIL?
 
 ############ OBSERVATION FORMAT #############

@@ -227,7 +227,7 @@ class Sleeper(object):
 
 # This is our training loop.
 def training_loop(env_fn, ac_kwargs=dict(), seed=0,
-                  steps_per_epoch=2000, epochs=100, replay_size=int(1e6), gamma=0.99,
+                  steps_per_epoch=10000, epochs=100, replay_size=int(1e6), gamma=0.99,
                   polyak=0.995, lr=1e-3, alpha=0.2, batch_size=100, start_steps=3000,
                   max_ep_len=300, save_freq=1, load=False, exp_name="Experiment_1", render=False, strategy='future',
                   num_cpus='max'):
@@ -272,28 +272,6 @@ def training_loop(env_fn, ac_kwargs=dict(), seed=0,
     [agent.set_weights.remote(master_weights) for agent in agents] # set the weights on our distributed actors.
     print('Set Weights of Distributed Actors.')
 
-    # test time of stuff
-    # double_o = env_process.remote(params_list[0])
-    #
-    # t = time.time()
-    # five_results = []
-    # for i in range(num_cpus):
-    #     five_results.append(double_o.init_buffer_with_random_actions.remote())
-    #
-    # # Wait until the end to call ray.get()
-    # ray.get(five_results)
-    # print('Time test took:',str(time.time()-t))
-    #
-    #
-    #
-    # t = time.time()
-    # # Each call to actor_func now goes to a different Sleeper
-    # five_results = []
-    # for agent in agents:
-    #     five_results.append(agent.init_buffer_with_random_actions.remote())
-    #
-    # ray.get(five_results)
-    # print('Time test took:',str(time.time()-t))
 
 
     # Logging
@@ -308,13 +286,13 @@ def training_loop(env_fn, ac_kwargs=dict(), seed=0,
     if not load:
         # collect some initial random steps to initialise
         runs = [agent.init_buffer_with_random_actions.remote() for agent in agents]
-        steps = [ray.get(run) for run in runs]
+        
         weights = [ray.get(agent.get_weights.remote()) for agent in agents]
         #average them
         avg_weights = average_weights(weights)
         master_SAC.set_weights(avg_weights)  # set master to average of the weights.
         [agent.set_weights.remote(avg_weights) for agent in agents]  # set each agent to master
-        steps_collected += sum(steps)
+        steps_collected += start_steps*num_cpus
 
 
     # now act with our actor, and alternately collect data, then train.
@@ -322,17 +300,19 @@ def training_loop(env_fn, ac_kwargs=dict(), seed=0,
         # collect an episode
 
         runs = [agent.rollout_episode.remote() for agent in agents]
-        steps = [ray.get(run) for run in runs] # separate the get from the run so its non blocking.
-        weights = [ray.get(agent.get_weights.remote()) for agent in agents]
-        # average them
-        avg_weights = average_weights(weights)
-        master_SAC.set_weights(avg_weights)  # set master to average of the weights.
-        [agent.set_weights.remote(avg_weights) for agent in agents] # set each agent to master
-        steps_collected += sum(steps)
+
+
+        steps_collected += max_ep_len *num_cpus
 
 
         # if an epoch has elapsed, save and test.
+        # or should we only average weights each epoch? hmm
         if steps_collected > 0 and steps_collected % steps_per_epoch == 0:
+            weights = [ray.get(agent.get_weights.remote()) for agent in agents]
+            # average them
+            avg_weights = average_weights(weights)
+            master_SAC.set_weights(avg_weights)  # set master to average of the weights.
+            [agent.set_weights.remote(avg_weights) for agent in agents] # set each agent to master
             master_SAC.save_weights()
             # Test the performance of the deterministic version of the agent.
             rollout_trajectories(n_steps=max_ep_len * 5, env=test_env, max_ep_len=max_ep_len,
@@ -360,7 +340,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    experiment_name = 'HER2_' + args.env + '_Hidden_' + str(args.hid) + 'l_' + str(args.l)
+    experiment_name = 'raysingleHER2_' + args.env + '_Hidden_' + str(args.hid) + 'l_' + str(args.l)
 
     training_loop(lambda: gym.make(args.env),
                   ac_kwargs=dict(hidden_sizes=[args.hid] * args.l),
