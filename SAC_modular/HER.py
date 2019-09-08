@@ -265,6 +265,7 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
         if curriculum_learn:
             for i in range(0,5):
                 s_i, s_g = sample_curriculum(observations)
+
                 rollout_trajectories(n_steps = max_ep_len,env = test_env, start_state=s_i,max_ep_len = max_ep_len, actor = SAC.actor.get_deterministic_action, summary_writer=summary_writer, current_total_steps = steps_collected, train = False, render = render, exp_name = exp_name, return_episode = True, goal_based = True)
         else:
             rollout_trajectories(n_steps = max_ep_len*5,env = test_env, max_ep_len = max_ep_len, actor = SAC.actor.get_deterministic_action, summary_writer=summary_writer, current_total_steps = steps_collected, train = False, render = render, exp_name = exp_name, return_episode = True, goal_based = True)

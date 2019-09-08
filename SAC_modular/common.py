@@ -136,7 +136,8 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
 
             a = actor(o)
         # Step the env
-
+        # if not train:
+        #     print(list(a.numpy()),',')
         if lstm_actor is not None and only_use_baseline is False:
             o2, r, d, _ = env.step(
                 a + a_base)  # final action is the sum of the baseline, and the adjustment by our RL learnt actor.
@@ -144,6 +145,7 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
         else:
 
             o2, r, d, _ = env.step(a)
+
 
         #       if z_learning: # need to include z and s_g in the obs for the replay buffer
         #         o2 = np.concatenate([o2['observation'],z,o2['desired_goal']], axis = 0)
