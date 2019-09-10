@@ -19,34 +19,41 @@ env.render(mode='human')
 env.reset()
 
 
-path= '../../ur5_RL/ur5_RL/envs/play_data/set_9'
+# path= '../../ur5_RL/ur5_RL/envs/play_data/set_9'
 
-# collect all file paths
-moments = [x[0] for x in os.walk(path)][1:]
-# sort them according to timestamp
-moments = natsorted(moments, alg=ns.IGNORECASE)
+# # collect all file paths
+# moments = [x[0] for x in os.walk(path)][1:]
+# # sort them according to timestamp
+# moments = natsorted(moments, alg=ns.IGNORECASE)
 
-def load_data_into_memory(moments):
+# def load_data_into_memory(moments):
 
-    observations = []
-    actions  = []
-    imgs = []
+#     observations = []
+#     actions  = []
+#     imgs = []
 
-    for s in tqdm(moments):
-        act = np.load(s+'/act.npy')
-        actions.append(act)
-        obs = np.load(s+'/obs.npy')
-        observations.append(obs)
+#     for s in tqdm(moments):
+#         act = np.load(s+'/act.npy')
+#         actions.append(act)
+#         obs = np.load(s+'/obs.npy')
+#         observations.append(obs)
         
         
-    return np.array(observations).astype(float), np.array(actions).astype(float)
+#     return np.array(observations).astype(float), np.array(actions).astype(float)
 
-observations, actions = load_data_into_memory(moments)
+# observations, actions = load_data_into_memory(moments)
+
+observations = np.load('collected_data/demo_o.npy')
+actions = np.load('collected_data/demo_a.npy')
+
 
 while(1):
 	env.reset()
 	index= np.random.randint(0,len(observations))
 	env.initialize_start_pos(observations[index])
 	#env.reset_goal_pos(observations[index+50][19:22])
-	time.sleep(0.5)
+	for i in range(0,50):
+		env.initialize_start_pos(observations[index+i])
+		time.sleep(0.01)
+	time.sleep(0.2)
 	pass

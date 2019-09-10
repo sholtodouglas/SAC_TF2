@@ -66,7 +66,7 @@ class mlp_gaussian_policy(Model):
     super(mlp_gaussian_policy, self).__init__()
     self.mlp = mlp(list(hidden_sizes), activation, activation)
     self.mu = Dense(act_dim, activation=output_activation)
-    self.log_std = Dense(act_dim, activation='tanh')
+    self.log_std = Dense(act_dim, activation='tanh',  name='log_std')
     self.act_limit = act_limit
 
   def call(self, inputs):
