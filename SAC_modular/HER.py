@@ -16,6 +16,12 @@ from tqdm import tqdm
 from natsort import natsorted, ns
 from latent import *
 
+from tensorflow.compat.v1 import ConfigProto
+from tensorflow.compat.v1 import InteractiveSession
+
+config = ConfigProto()
+config.gpu_options.allow_growth = True
+session = InteractiveSession(config=config)
 #TODO Answer why reward scaling makes such a damn difference?
 
 ############################################################################################################
@@ -147,7 +153,7 @@ MAX_SEQ_LEN = 200
 MIN_SEQ_LEN = 30
 train_test_split = 0.9
 curriculum_learn = True
-BC_repeat = 20
+BC_repeat = 50
 EPOCHS = 10
 AG_IDXS = [19,22] # only for UR5
 observations = np.load('collected_data/demo_o.npy')
@@ -210,14 +216,14 @@ def fill_replay_buffer_with_expert_transitions(replay_buffer):
 def compute_loss(obs, acts, s_g, mask, lengths,training=False, actor = None):
     AVG_SEQ_LEN = obs.shape[1]
     CURR_BATCH_SIZE = obs.shape[0]
-    
+
     IMI = 0
     OBS_pred_loss = 0
 
     s_g_dim = s_g.shape[-1]
     s_g = tf.tile(s_g, [1, MAX_SEQ_LEN])
     s_g = tf.reshape(s_g, [-1, MAX_SEQ_LEN, s_g_dim])
-    
+
     o_in = tf.concat((obs,s_g), axis  = 2)
     o_in = tf.reshape(o_in,[CURR_BATCH_SIZE*MAX_SEQ_LEN, OBS_DIM+s_g.shape[-1]])
     mu, _, _, _, _ = actor(o_in)
@@ -227,7 +233,7 @@ def compute_loss(obs, acts, s_g, mask, lengths,training=False, actor = None):
     mask = tf.reshape(mask, [CURR_BATCH_SIZE*MAX_SEQ_LEN, ACT_DIM])
     loss = tf.reduce_mean(tf.losses.MAE(mu * mask, acts * mask))
 
-    
+
     return loss
 
 
@@ -242,7 +248,7 @@ def BC_train_step(obs, acts, mask, lengths, optimizer, actor):
         s_g = tf.gather_nd(obs,
                            tf.concat((range_lens, expanded_lengths), 1))  # get the actual last element of the sequencs.
         s_g = s_g[:, AG_IDXS[0]:AG_IDXS[1]]
-        
+
 
         lengths = tf.cast(lengths, tf.float32)
         loss = compute_loss(obs, acts, s_g, mask, lengths,actor = actor)
@@ -306,20 +312,30 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
   # now collect epsiodes
   total_steps = steps_per_epoch * epochs
   steps_collected = 0
+  BC_steps = 0
   epoch_ticker = 0
 
   s_i, s_g = None, None
 
-  print('Beginning BC Pretrain')
-  for i in range(5000):
-        obs, acts, mask, lengths = BC_set.next()
-        l  =  BC_train_step(obs, acts, mask, lengths, SAC.pi_optimizer, SAC.actor)
-        log_BC_metrics(summary_writer, l, steps_collected+i)
-  
+
+  # for s in range(100000):
+  #     obs, acts, mask, lengths = BC_set.next()
+  #     l  =  BC_train_step(obs, acts, mask, lengths, SAC.pi_optimizer, SAC.actor)
+  #     log_BC_metrics(summary_writer, l, steps_collected+s)
+  #     print(s, l)
+  #     if s % 1000 ==0:
+  #         for i in range(0,2):
+  #             s_i, s_g = sample_curriculum(observations)
+  #
+  #             rollout_trajectories(n_steps = max_ep_len,env = test_env, start_state=s_i,s_g = s_g,max_ep_len = max_ep_len, actor = SAC.actor.get_deterministic_action, summary_writer=summary_writer, current_total_steps = steps_collected+i*max_ep_len, train = False, render = render, exp_name = exp_name, return_episode = True, goal_based = True)
+
+
+
+
   if not load:
   # collect some initial random steps to initialise
     if curriculum_learn:
-        
+
         for i in range(0,20):
             s_i, s_g = sample_curriculum(observations)
             # lots of short episodes, the intention is to get lots of different exposure to object interaction states
@@ -327,8 +343,8 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
             steps_collected += episodes['n_steps']
             [replay_buffer.store_hindsight_episode(e) for e in episodes['episodes']]
             fill_replay_buffer_with_expert_transitions(replay_buffer)
-            
-            
+
+
 
     else:
         episodes = rollout_trajectories(n_steps = start_steps,env = env, start_state=s_i,max_ep_len = max_ep_len, actor = 'random', summary_writer = summary_writer, exp_name = exp_name, return_episode = True, goal_based = True)
@@ -340,7 +356,7 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
     update_models(SAC, replay_buffer, steps = steps_collected, batch_size = batch_size)
 
 
-  
+
   # now act with our actor, and alternately collect data, then train.
   while steps_collected < total_steps:
     # collect an episode
@@ -352,16 +368,22 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
     if curriculum_learn:
         s_i, s_g = sample_curriculum(observations)
         fill_replay_buffer_with_expert_transitions(replay_buffer)
+
+        for i in range(BC_repeat):
+            obs, acts, mask, lengths = BC_set.next()
+            l  =  BC_train_step(obs, acts, mask, lengths, SAC.pi_optimizer, SAC.actor)
+            log_BC_metrics(summary_writer, l, BC_steps+i)
+            BC_steps += 1
+
+
+
     episodes = rollout_trajectories(n_steps = max_ep_len,env = env,start_state=s_i, max_ep_len = max_ep_len, actor = SAC.actor.get_stochastic_action, summary_writer=summary_writer, current_total_steps = steps_collected, exp_name = exp_name, return_episode = True, goal_based = True)
     steps_collected += episodes['n_steps']
     [replay_buffer.store_hindsight_episode(e) for e in episodes['episodes']]
 
     update_models(SAC, replay_buffer, steps = max_ep_len, batch_size = batch_size)
 
-    for i in range(BC_repeat):
-        obs, acts, mask, lengths = BC_set.next()
-        l  =  BC_train_step(obs, acts, mask, lengths, SAC.pi_optimizer, SAC.actor)
-        log_BC_metrics(summary_writer, l, current_total_steps+i)
+
 
     # if an epoch has elapsed, save and test.
     if steps_collected >= epoch_ticker:
@@ -387,7 +409,7 @@ if __name__ == '__main__':
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--seed', '-s', type=int, default=0)
     parser.add_argument('--epochs', type=int, default=1500)
-    parser.add_argument('--max_ep_len', type=int, default=400) # fetch reach learns amazingly if 50, but not if 200 -why?
+    parser.add_argument('--max_ep_len', type=int, default=200) # fetch reach learns amazingly if 50, but not if 200 -why?
     parser.add_argument('--exp_name', type=str, default='experiment_1')
     parser.add_argument('--load', type=bool, default=False)
     parser.add_argument('--render', type=bool, default=False)
