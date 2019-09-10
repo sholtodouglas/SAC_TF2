@@ -131,7 +131,9 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
             else:
                 a = actor(np.concatenate([o['observation'], z, o['desired_goal']], axis=0))
         elif goal_based:
+
             a = actor(np.concatenate([o['observation'], o['desired_goal']], axis=0))
+
         else:
 
             a = actor(o)
