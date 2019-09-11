@@ -56,7 +56,7 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
                          replay_trajectory=None,
                          compare_states=None, start_state=None, goal_based=False, lstm_actor=None,
                          only_use_baseline=False,
-                         replay_obs=None, extra_info=None):
+                         replay_obs=None, extra_info=None, pixels=False):
 
 
     # reset the environment
@@ -102,6 +102,7 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
     if return_episode:
         episode_buffer = []
         episode = []
+        pics = []
 
     if lstm_actor is not None:
         past_state = [None]
@@ -181,6 +182,8 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
                 episode.append([o, a, r, o2, d, z])
             else:
                 episode.append([o, a, r, o2, d])  # add the full transition to the episode.
+        if pixels:
+            pics.append(env.render('rgb_array'))
 
         # Super critical, easy to overlook step: make sure to update
         # most recent observation!
@@ -206,7 +209,7 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
 
             # else it will be the end of the loop and of the function.
     if return_episode:
-        return {'episodes': episode_buffer, 'n_steps': n_steps}
+        return {'episodes': episode_buffer, 'n_steps': n_steps,'pics':pics }
     return n_steps
 
 
