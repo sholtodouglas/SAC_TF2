@@ -26,6 +26,7 @@ act_dim = env.action_space.shape[0]
 #experiment_name = 'pos_cntrl_seg_reacher2D-v0_Hidden_128l_2'
 #experiment_name = 'pos_cntrl_exp_pointMass-v0_Hidden_128l_2'
 #experiment_name = 'no_reset_vel_pointMass-v0_Hidden_128l_2'
+experiment_name = 'ultimate_pm_object'
 experiment_name = 'HER2_pointMassObject-v0_Hidden_128l_2'
 extra_info = False
 if experiment_name == 'HER2_pointMassObject-v0_Hidden_128l_2':
@@ -60,9 +61,8 @@ if extra_info:
 	np.save('collected_data/'+str(n_steps)+experiment_name+'expert_extra_info',np.concatenate(extra_info_buff))
 np.save('collected_data/'+str(n_steps)+experiment_name+'expert_actions',np.concatenate(action_buff))
 np.save('collected_data/'+str(n_steps)+experiment_name+'expert_obs_',np.concatenate(observation_buff))
+np.save('collected_data/'+str(n_steps)+experiment_name+'pics',np.array(episodes['pics']))
 
-
-np.savez('collected_data/'+str(n_steps)+experiment_name+'episodes', episodes = episodes['episodes'])
 # if train encoder z = enc(T) - train with policy reco loss.
 # then we can do trajectory based GAIL
 # f(T|Z)

@@ -152,31 +152,32 @@ class HERReplayBuffer:
 MAX_SEQ_LEN = 200
 MIN_SEQ_LEN = 30
 train_test_split = 0.9
-curriculum_learn = True
+curriculum_learn = False
 BC_repeat = 50
 EPOCHS = 10
 AG_IDXS = [19,22] # only for UR5
-observations = np.load('collected_data/demo_o.npy')
-actions = np.load('collected_data/demo_a.npy')
-OBS_DIM = observations.shape[1]
-ACT_DIM = actions.shape[1]
-train_len = int(len(observations) * train_test_split)
-train_obs_subset = observations[:train_len, :]
-train_acts_subset = actions[:train_len, :]
-valid_obs_subset = observations[train_len:, :]
-valid_acts_subset = actions[train_len:, :]
-train_len = len(train_obs_subset) - MAX_SEQ_LEN
-valid_len = len(valid_obs_subset) - MAX_SEQ_LEN
+if curriculum_learn:
+    observations = np.load('collected_data/demo_o.npy')
+    actions = np.load('collected_data/demo_a.npy')
+    OBS_DIM = observations.shape[1]
+    ACT_DIM = actions.shape[1]
+    train_len = int(len(observations) * train_test_split)
+    train_obs_subset = observations[:train_len, :]
+    train_acts_subset = actions[:train_len, :]
+    valid_obs_subset = observations[train_len:, :]
+    valid_acts_subset = actions[train_len:, :]
+    train_len = len(train_obs_subset) - MAX_SEQ_LEN
+    valid_len = len(valid_obs_subset) - MAX_SEQ_LEN
 
-dataloader = Dataloader(observations, actions, MIN_SEQ_LEN, MAX_SEQ_LEN)
-dataset = tf.data.Dataset.from_generator(dataloader.data_generator, (tf.float32, tf.float32, tf.float32, tf.int32),
-                                         args=('-','Train'))
-valid_dataset = tf.data.Dataset.from_generator(dataloader.data_generator, (tf.float32, tf.float32, tf.float32, tf.int32),
-                                               args=('-','Valid'))
+    dataloader = Dataloader(observations, actions, MIN_SEQ_LEN, MAX_SEQ_LEN)
+    dataset = tf.data.Dataset.from_generator(dataloader.data_generator, (tf.float32, tf.float32, tf.float32, tf.int32),
+                                             args=('-','Train'))
+    valid_dataset = tf.data.Dataset.from_generator(dataloader.data_generator, (tf.float32, tf.float32, tf.float32, tf.int32),
+                                                   args=('-','Valid'))
 
 
-OBS_DIM = dataloader.OBS_DIM
-ACT_DIM = dataloader.ACT_DIM
+    OBS_DIM = dataloader.OBS_DIM
+    ACT_DIM = dataloader.ACT_DIM
 
 def sample_curriculum(observations):
     index= np.random.randint(0,len(observations)-MAX_SEQ_LEN)
@@ -297,7 +298,8 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
   SAC = SAC_model(env, obs_dim, act_dim, ac_kwargs['hidden_sizes'],lr, gamma, alpha, polyak,  load, exp_name)
   # Experience buffer
   replay_buffer = HERReplayBuffer(env, obs_dim, act_dim, replay_size, n_sampled_goal = 4, goal_selection_strategy = strategy)
-  BC_set = iter(dataset.shuffle(train_len).batch(5).repeat(steps_per_epoch*epochs//train_len))
+  if curriculum_learn:
+    BC_set = iter(dataset.shuffle(train_len).batch(5).repeat(steps_per_epoch*epochs//train_len))
 
   #Logging
   start_time = time.time()
@@ -395,7 +397,7 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
 
                 rollout_trajectories(n_steps = max_ep_len,env = test_env, start_state=s_i,max_ep_len = max_ep_len, actor = SAC.actor.get_deterministic_action, summary_writer=summary_writer, current_total_steps = steps_collected+i*max_ep_len, train = False, render = render, exp_name = exp_name, return_episode = True, goal_based = True)
         else:
-            rollout_trajectories(n_steps = max_ep_len*5,env = test_env, max_ep_len = max_ep_len, actor = SAC.actor.get_stochastic_action, summary_writer=summary_writer, current_total_steps = steps_collected, train = False, render = render, exp_name = exp_name, return_episode = True, goal_based = True)
+            rollout_trajectories(n_steps = max_ep_len*5,env = test_env, max_ep_len = max_ep_len, actor = SAC.actor.get_deterministic_action, summary_writer=summary_writer, current_total_steps = steps_collected, train = False, render = render, exp_name = exp_name, return_episode = True, goal_based = True)
         epoch_ticker += steps_per_epoch
 
 
