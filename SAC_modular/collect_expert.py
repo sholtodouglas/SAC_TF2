@@ -1,5 +1,7 @@
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
 import gym
-import reach2D
 import numpy as np
 from SAC import *
 from common import *
@@ -8,11 +10,11 @@ from gym import wrappers
 
 flatten = False
 ENV_NAME = 'pointMassObject-v0'#'reacher2D-v0'
-ENV_NAME = 'ur5_RL_relative-v0'
+#ENV_NAME = 'ur5_RL_relative-v0'
 #ENV_NAME = 'ur5_RL-v0'
 #ENV_NAME = 'Pendulum-v0'
 env = gym.make(ENV_NAME)
-env.activate_roving_goal()
+#env.activate_roving_goal()
 if flatten:
 	env = wrappers.FlattenDictWrapper(env, dict_keys=['observation', 'desired_goal'])
 	obs_dim = env.observation_space.shape[0]
@@ -38,8 +40,9 @@ if experiment_name == 'HER2_pointMassObject-v0_Hidden_128l_2':
 
 SAC = SAC_model(env, obs_dim, act_dim, [128,128],load = True, exp_name = experiment_name)
 n_steps = 30000
-episodes = rollout_trajectories(n_steps = n_steps,env = env, max_ep_len = 30,goal_based = not flatten, actor = SAC.actor.get_deterministic_action, train = False, render = True, exp_name = experiment_name, return_episode = True)
-
+episodes = rollout_trajectories(end_on_reward = True, n_steps = n_steps,env = env, max_ep_len = 100,goal_based = not flatten, actor = SAC.actor.get_deterministic_action, train = False, render = True, exp_name = experiment_name, return_episode = True)
+# episodes['episodes'] is a list of trajectories, of which each is an obs, ag dg, extrainfo in a single list for some reason.
+#
 action_buff = []
 observation_buff = []
 if extra_info:
@@ -58,6 +61,8 @@ if extra_info:
 np.save('collected_data/'+str(n_steps)+experiment_name+'expert_actions',np.concatenate(action_buff))
 np.save('collected_data/'+str(n_steps)+experiment_name+'expert_obs_',np.concatenate(observation_buff))
 
+
+np.savez('collected_data/'+str(n_steps)+experiment_name+'episodes', episodes = episodes['episodes'])
 # if train encoder z = enc(T) - train with policy reco loss.
 # then we can do trajectory based GAIL
 # f(T|Z)

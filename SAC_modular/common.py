@@ -1,7 +1,9 @@
 
+
 import tensorflow as tf
 import numpy as np
 import copy
+import time
 
 
 def assign_variables(net1, net2):
@@ -56,7 +58,7 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
                          replay_trajectory=None,
                          compare_states=None, start_state=None, goal_based=False, lstm_actor=None,
                          only_use_baseline=False,
-                         replay_obs=None, extra_info=None):
+                         replay_obs=None, extra_info=None, end_on_reward = False):
 
 
     # reset the environment
@@ -162,7 +164,7 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
         # horizon (that is, when it's an artificial terminal signal
         # that isn't based on the agent's state)
         d = False if ep_len == max_ep_len else d
-
+        
         # Store experience to replay buffer # dont use a replay buffer with HER, because we need to take entire episodes and do some computation so that happens after.
         if replay_buffer:
             #         if compare_states != None:
@@ -180,7 +182,7 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
             if z_learning:
                 episode.append([o, a, r, o2, d, z])
             else:
-                episode.append([o, a, r, o2, d])  # add the full transition to the episode.
+                episode.append([o, np.array(a), r, o2, d])  # add the full transition to the episode.
 
         # Super critical, easy to overlook step: make sure to update
         # most recent observation!
@@ -188,6 +190,10 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
         o = o2
         # if either we've ended an episdoe, collected all the steps or have reached max ep len and
         # thus need to log ep reward and reset
+
+        if end_on_reward:
+            if r >= 0:
+                d = 1
         if d or (ep_len == int(max_ep_len)) or (t == int((n_steps - 1))):
             if return_episode:
                 episode_buffer.append(episode)
@@ -233,10 +239,8 @@ def episode_to_trajectory(episode, flattened = False, representation_learning = 
 
     if include_extra_info:
         extra_info.append(o['extra_info'])
-        
+
     actions.append(a)
   if include_extra_info:
     return np.array(observations), np.array(actions), np.array(extra_info)
   return np.array(observations), np.array(actions)
-
-
