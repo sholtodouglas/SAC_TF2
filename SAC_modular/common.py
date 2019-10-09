@@ -56,7 +56,7 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
                          replay_trajectory=None,
                          compare_states=None, start_state=None, goal_based=False, lstm_actor=None,
                          only_use_baseline=False,
-                         replay_obs=None, extra_info=None, pixels=False):
+                         replay_obs=None, extra_info=None, pixels=False, done_on_reward =False):
 
 
     # reset the environment
@@ -191,6 +191,9 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
         o = o2
         # if either we've ended an episdoe, collected all the steps or have reached max ep len and
         # thus need to log ep reward and reset
+        if done_on_reward:
+            if r > 0:
+                d = 1
         if d or (ep_len == int(max_ep_len)) or (t == int((n_steps - 1))):
             if return_episode:
                 episode_buffer.append(episode)

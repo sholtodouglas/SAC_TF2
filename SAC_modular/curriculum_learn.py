@@ -46,14 +46,26 @@ env.reset()
 observations = np.load('collected_data/demo_o.npy')
 actions = np.load('collected_data/demo_a.npy')
 
+tstep =  p.addUserDebugParameter("step", 0, len(observations), 0.0)
+idxs = [733, 2244]
+for index in idxs:
+
+	env.initialize_start_pos(observations[index])
+	time.sleep(1)
 
 while(1):
-	env.reset()
-	index= np.random.randint(0,len(observations))
+	#env.reset()
+	#index= np.random.randint(0,len(observations))
+	index = int(p.readUserDebugParameter(tstep))
+
+	print(index)
 	env.initialize_start_pos(observations[index])
 	#env.reset_goal_pos(observations[index+50][19:22])
-	for i in range(0,50):
-		env.initialize_start_pos(observations[index+i])
-		time.sleep(0.01)
-	time.sleep(0.2)
+
+
+	# for i in range(0,len(observations)):
+	# 	env.initialize_start_pos(observations[index+i])
+	# 	time.sleep(0.15)
+	# 	print(index+i)
+	#time.sleep(0.2)
 	pass
