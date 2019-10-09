@@ -62,7 +62,6 @@ if extra_info:
 	np.save('collected_data/'+str(n_steps)+experiment_name+'expert_extra_info',np.concatenate(extra_info_buff))
 np.save('collected_data/'+str(n_steps)+experiment_name+'expert_actions',np.concatenate(action_buff))
 np.save('collected_data/'+str(n_steps)+experiment_name+'expert_obs_',np.concatenate(observation_buff))
-np.savez('collected_data/'+str(n_steps)+experiment_name+'episodes', episodes = episodes['episodes'])
 
 # if train encoder z = enc(T) - train with policy reco loss.
 # then we can do trajectory based GAIL
