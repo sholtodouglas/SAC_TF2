@@ -4,9 +4,11 @@
 # In[5]:
 
 
-from tensorflow.keras.layers import Dense, Lambda
+from tensorflow.keras.layers import Dense, Lambda, Conv2D, Flatten, LeakyReLU, Conv2DTranspose
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
+
+
 import tensorflow as tf
 import numpy as np
 
@@ -28,7 +30,7 @@ from huskarl.core import HkException
 
 import matplotlib.pyplot as plt
 import gym
-
+import ur5_RL
 import huskarl as hk
 
 
@@ -55,13 +57,12 @@ class DQN(Agent):
         Double Q-Learning: "Deep Reinforcement Learning with Double Q-learning" (van Hasselt et al., 2015)
         Dueling Q-Network: "Dueling Network Architectures for Deep Reinforcement Learning" (Wang et al., 2016)
     """
-    def __init__(self, model, actions, optimizer=None, policy=None, test_policy=None,
-                 memsize=10_000, target_update=10, gamma=0.99, batch_size=64, nsteps=1,
+    def __init__(self, model, optimizer=None, policy=None, test_policy=None,
+                 memsize=10_000, target_update=3, gamma=0.6, batch_size=32, nsteps=1,
                  enable_double_dqn=True, enable_dueling_network=False, dueling_type='avg'):
         """
         TODO: Describe parameters
         """
-        self.actions = actions
         self.optimizer = Adam(lr=3e-3) if optimizer is None else optimizer
 
         self.policy = EpsGreedy(0.1) if policy is None else policy
@@ -81,21 +82,7 @@ class DQN(Agent):
         self.enable_dueling_network = enable_dueling_network
         self.dueling_type = dueling_type
 
-        # Create output layer based on number of actions and (optionally) a dueling architecture
-        raw_output = model.layers[-1].output
-        if self.enable_dueling_network:
-            # "Dueling Network Architectures for Deep Reinforcement Learning" (Wang et al., 2016)
-            # Output the state value (V) and the action-specific advantages (A) separately then compute the Q values: Q = A + V
-            dueling_layer = Dense(self.actions + 1, activation='linear')(raw_output)
-            if   self.dueling_type == 'avg':   f = lambda a: tf.expand_dims(a[:,0], -1) + a[:,1:] - tf.reduce_mean(a[:,1:], axis=1, keepdims=True)
-            elif self.dueling_type == 'max':   f = lambda a: tf.expand_dims(a[:,0], -1) + a[:,1:] - tf.reduce_max(a[:,1:], axis=1, keepdims=True)
-            elif self.dueling_type == 'naive': f = lambda a: tf.expand_dims(a[:,0], -1) + a[:,1:]
-            else: raise HkException("dueling_type must be one of {'avg','max','naive'}")
-            output_layer = Lambda(f, output_shape=(self.actions,))(dueling_layer)
-        else:
-            output_layer = Dense(self.actions, activation='linear')(raw_output)
-
-        self.model = Model(inputs=model.input, outputs=output_layer)
+        self.model =model
 
         # Define loss function that computes the MSE between target Q-values and cumulative discounted rewards
         # If using PrioritizedExperienceReplay, the loss function also computes the TD error and updates the trace priorities
@@ -107,6 +94,7 @@ class DQN(Agent):
             seq = tf.cast(tf.range(0, tf.shape(action_batch)[0]), tf.int32)
             action_idxs = tf.transpose(tf.stack([seq, tf.cast(action_batch, tf.int32)]))
             qvals = tf.gather_nd(y_pred, action_idxs)
+
             if isinstance(self.memory, memory.PrioritizedExperienceReplay):
                 def update_priorities(_qvals, _target_qvals, _traces_idxs):
                     """Computes the TD error and updates memory priorities."""
@@ -129,8 +117,19 @@ class DQN(Agent):
 
     def act(self, state, instance=0):
         """Returns the action to be taken given a state."""
+        plt.imshow(state)
+
         qvals = self.model.predict(np.array([state]))[0]
-        return self.policy.act(qvals) if self.training else self.test_policy.act(qvals)
+        plt.imshow(np.reshape(qvals, [128,128]), alpha = 0.5, cmap = 'plasma')
+        plt.savefig('q_overlay')
+        # plt.show()
+        # we know our original shape is 1,128,128,1
+        world_range = 0.26 * 2
+        pixel_range = 128
+        mid = pixel_range / 2
+        index = self.policy.act(qvals) if self.training else self.test_policy.act(qvals)
+        pixel_index = np.unravel_index(index, [128,128])
+        return np.array(list((np.array(pixel_index)-mid)/(pixel_range/world_range)) + list([0])),  index# eventually have it from the depth map
 
     def push(self, transition, instance=0):
         """Stores the transition in memory."""
@@ -161,10 +160,11 @@ class DQN(Agent):
         target_qvals = np.zeros(batch_size)
         non_final_last_next_states = [es for es in end_state_batch if es is not None]
 
-        if len(non_final_last_next_states) > 0:		
+        if len(non_final_last_next_states) > 0:
             if self.enable_double_dqn:
                 # "Deep Reinforcement Learning with Double Q-learning" (van Hasselt et al., 2015)
                 # The online network predicts the actions while the target network is used to estimate the Q-values
+
                 q_values = self.model.predict_on_batch(np.array(non_final_last_next_states))
                 actions = np.argmax(q_values, axis=1)
                 # Estimate Q-values using the target network but select the values with the
@@ -193,6 +193,7 @@ class DQN(Agent):
             loss_data.append(self.memory.last_traces_idxs())
 
         # Train model
+
         self.model.train_on_batch(np.array(state_batch), np.stack(loss_data).transpose())
 
 
@@ -233,23 +234,26 @@ class Simulation:
 
         # Create and initialize environment instances
         envs = [self.create_env() for i in range(instances)]
-        states = [env.reset() for env in envs]
+        envs[0].render(mode='human')
+        states = [env.reset()['observation'][0] for env in envs] # get the image
 
         for step in range(max_steps):
             for i in range(instances):
                 if visualize: envs[i].render()
-                action = self.agent.act(states[i], i)
+                action, action_index = self.agent.act(states[i], i)
                 next_state, reward, done, _ = envs[i].step(action)
-                self.agent.push(Transition(states[i], action, reward, None if done else next_state), i)
+                (next_image, next_depth) = next_state['observation']
+                self.agent.push(Transition(states[i], action_index, reward, None if done else next_image), i)
                 episode_rewards[i] += reward
                 if done:
                     episode_reward_sequences[i].append(episode_rewards[i])
                     episode_step_sequences[i].append(step)
                     episode_rewards[i] = 0
                     if plot: plot(episode_reward_sequences, episode_step_sequences)
-                    states[i] = envs[i].reset()
+                    (image, depth) =  envs[i].reset()['observation']
+                    states[i] = image
                 else:
-                    states[i] = next_state
+                    states[i] = next_image
             # Perform one step of the optimization
             self.agent.train(step)
 
@@ -262,18 +266,36 @@ class Simulation:
 
 
 # Setup gym environment
-create_env = lambda: gym.make('CartPole-v0').unwrapped
+create_env = lambda: gym.make('ur5_RL_lego-v0')
 dummy_env = create_env()
 
 # Build a simple neural network with 3 fully connected layers as our model
-model = Sequential([
-    Dense(16, activation='relu', input_shape=dummy_env.observation_space.shape),
-    Dense(16, activation='relu'),
-    Dense(16, activation='relu'),
-])
+# model = Sequential([
+#     Dense(16, activation='relu', input_shape=dummy_env.observation_space.shape),
+#     Dense(16, activation='relu'),
+#     Dense(16, activation='relu'),
+# ])
+
+inputs = tf.keras.Input(shape=(128,128,3), name='img')
+x = Conv2D(filters=32, kernel_size=4, strides=2, padding='same')(inputs)
+x = LeakyReLU()(x)
+x =  Conv2D(filters=64, kernel_size=4, strides=2, padding='same')(x)
+x = LeakyReLU()(x)
+x =  Conv2D(filters=128, kernel_size=4, strides=1, padding='same')(x)
+x = LeakyReLU()(x)
+x =  Conv2D(filters=256, kernel_size=4, strides=1, padding='same')(x)
+x = LeakyReLU()(x)
+x =  Conv2DTranspose(filters=32,kernel_size=4,strides=2,padding='same')(x)
+x = LeakyReLU()(x)
+outputs =  Conv2DTranspose(filters=1,kernel_size=4,strides=2,padding='same')(x)
+outputs = Flatten()(outputs)
+model = tf.keras.Model(inputs=inputs, outputs=outputs, name='model')
+print(model.summary())
 
 # Create Deep Q-Learning Network agent
-agent = DQN(model, actions=dummy_env.action_space.n, nsteps=2)
+#agent = DQN(model, actions=dummy_env.action_space.n, nsteps=3)
+
+agent = DQN(model, nsteps=2)
 
 def plot_rewards(episode_rewards, episode_steps, done=False):
     plt.clf()
@@ -286,6 +308,7 @@ def plot_rewards(episode_rewards, episode_steps, done=False):
 # Create simulation, train and then test
 sim = Simulation(create_env, agent)
 sim.train(max_steps=3000, visualize=True, plot=plot_rewards)
+model.save('convolutional_boi.h5')
 sim.test(max_steps=1000)
 
 
