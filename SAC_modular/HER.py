@@ -267,7 +267,46 @@ def log_BC_metrics(summary_writer, IMI, steps):
         tf.summary.scalar('imi_loss', IMI, step=steps)
 
 
+class VAE_Encoder(Model):
+    def __init__(self, LAYER_SIZE, LATENT_DIM):
+        super(VAE_Encoder, self).__init__()
+        # self.flatten = Flatten()
+        self.d1 = Dense(LAYER_SIZE, activation=tf.nn.leaky_relu)
+        self.d2 = Dense(LAYER_SIZE, activation=tf.nn.leaky_relu)
+        self.mu = Dense(LATENT_DIM)
+        self.scale = Dense(LATENT_DIM, activation='softplus')
 
+    def call(self, x, acts=None, training=False):
+        # x = self.flatten(x)
+
+        x = self.d1(x)
+        x = self.d2(x)
+
+        mu = self.mu(x)
+        s = self.scale(x)
+        return mu,s
+def load_autoencoder(extension, BATCH_SIZE, OBS_DIM, encoder):
+    print('Loading in network weights...')
+    # load some sample data to initialise the model
+    #         load_set = iter(self.dataset.shuffle(self.TRAIN_LEN).batch(self.BATCH_SIZE))
+    if IMAGE:
+        obs = tf.zeros((BATCH_SIZE, 48, 48, 3))
+    else:
+        obs = tf.zeros((BATCH_SIZE, OBS_DIM))
+    o,_ = encoder(obs)
+
+    print('Models Initalised')
+    encoder.load_weights(extension + '/encoder.h5')
+    print('Weights loaded.')
+    return encoder
+
+AUTOENCODE = True
+if AUTOENCODE:
+    IMAGE = False
+    LAYER_SIZE = 64
+    LATENT_DIM = 12
+    encoder = VAE_Encoder(LAYER_SIZE, LATENT_DIM)
+    encoder = load_autoencoder('saved_models/manifold_learning_states_baseline12', LAYER_SIZE, 8, encoder)
 
 # This is our training loop.
 def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
@@ -286,15 +325,25 @@ def training_loop(env_fn,  ac_kwargs=dict(), seed=0,
   num_cpus = psutil.cpu_count(logical=False)
   env = env_fn()
   #pybullet needs the GUI env to be reset first for our noncollision stuff to work.
+  obs_dim = env.observation_space.spaces['observation'].shape[0] + env.observation_space.spaces['desired_goal'].shape[0]
+  act_dim = env.action_space.shape[0]
+  if AUTOENCODE:
+      env.set_state_representation(encoder)
+      test_env.set_state_representation(encoder)
+      obs_dim = LATENT_DIM  + env.observation_space.spaces['desired_goal'].shape[0]
+
+
+
   if render:
     print('Rendering Test Rollouts')
     test_env.render(mode='human')
   test_env.reset()
 
 
+
   # Get Env dimensions
-  obs_dim = env.observation_space.spaces['observation'].shape[0] + env.observation_space.spaces['desired_goal'].shape[0]
-  act_dim = env.action_space.shape[0]
+
+
   SAC = SAC_model(env, obs_dim, act_dim, ac_kwargs['hidden_sizes'],lr, gamma, alpha, polyak,  load, exp_name)
   # Experience buffer
   replay_buffer = HERReplayBuffer(env, obs_dim, act_dim, replay_size, n_sampled_goal = 4, goal_selection_strategy = strategy)
@@ -420,8 +469,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    experiment_name = 'HER2_'+args.env+'_Hidden_'+str(args.hid)+'l_'+str(args.l)
+    experiment_name = 'HER2_linear_state_rep_sparse_reward_'+args.env+'_Hidden_'+str(args.hid)+'l_'+str(args.l)
 
     training_loop(lambda : gym.make(args.env),
       ac_kwargs=dict(hidden_sizes=[args.hid]*args.l),
-      gamma=args.gamma, seed=args.seed, epochs=args.epochs, load = args.load, exp_name = experiment_name, max_ep_len = args.max_ep_len, render = True, strategy = args.strategy)
+      gamma=args.gamma, seed=args.seed, epochs=args.epochs, load = False, exp_name = experiment_name, max_ep_len = args.max_ep_len, render = True, strategy = args.strategy)

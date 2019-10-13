@@ -143,12 +143,12 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
         # if not train:
         #     print(list(a.numpy()),',')
         if lstm_actor is not None and only_use_baseline is False:
-            o2, r, d, _ = env.step(
+            o2, r, d, info = env.step(
                 a + a_base)  # final action is the sum of the baseline, and the adjustment by our RL learnt actor.
             o2['baseline_action'] = a_base
         else:
 
-            o2, r, d, _ = env.step(a)
+            o2, r, d, info = env.step(a)
 
 
         #       if z_learning: # need to include z and s_g in the obs for the replay buffer
@@ -206,6 +206,7 @@ def rollout_trajectories(n_steps, env, max_ep_len=200, actor=None, replay_buffer
                     else:
                         print('Test Frame: ', t + current_total_steps, ' Return: ', ep_ret)
                         tf.summary.scalar('Test_Episode_return', ep_ret, step=t + current_total_steps)
+                        tf.summary.scalar('Test Success', info['is_success'], step = t+current_total_steps)
             # reset the env if there are still steps to collect
             if t < n_steps - 1:
                 o, r, d, ep_ret, ep_len = env.reset(), 0, False, 0, 0

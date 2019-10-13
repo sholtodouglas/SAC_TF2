@@ -33,7 +33,7 @@ import gym
 import ur5_RL
 import huskarl as hk
 
-
+from scipy import ndimage, misc
 config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = True
 session = tf.compat.v1.Session(config=config)
@@ -117,12 +117,13 @@ class DQN(Agent):
 
     def act(self, state, instance=0):
         """Returns the action to be taken given a state."""
-        plt.imshow(state)
+
 
         qvals = self.model.predict(np.array([state]))[0]
-        plt.imshow(np.reshape(qvals, [128,128]), alpha = 0.5, cmap = 'plasma')
-        plt.savefig('q_overlay')
-        # plt.show()
+        # plt.imshow(state)
+        # plt.imshow(np.reshape(qvals, [128,128]), alpha = 0.5, cmap = 'plasma')
+        # plt.savefig('q_overlay')
+        # # plt.show()
         # we know our original shape is 1,128,128,1
         world_range = 0.26 * 2
         pixel_range = 128
@@ -307,6 +308,7 @@ def plot_rewards(episode_rewards, episode_steps, done=False):
 
 # Create simulation, train and then test
 sim = Simulation(create_env, agent)
+model.save('convolutional_boi.h5')
 sim.train(max_steps=3000, visualize=True, plot=plot_rewards)
 model.save('convolutional_boi.h5')
 sim.test(max_steps=1000)

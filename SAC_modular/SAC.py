@@ -328,6 +328,51 @@ class SAC_model():
   # This is our training loop.
 
 
+class VAE_Encoder(Model):
+    def __init__(self, LAYER_SIZE, LATENT_DIM):
+        super(VAE_Encoder, self).__init__()
+        # self.flatten = Flatten()
+        self.d1 = Dense(LAYER_SIZE, activation=tf.nn.leaky_relu)
+        self.d2 = Dense(LAYER_SIZE, activation=tf.nn.leaky_relu)
+        self.mu = Dense(LATENT_DIM)
+        self.scale = Dense(LATENT_DIM, activation='softplus')
+
+    def call(self, x, acts=None, training=False):
+        # x = self.flatten(x)
+
+        x = self.d1(x)
+        x = self.d2(x)
+
+        mu = self.mu(x)
+        s = self.scale(x)
+        return mu,s
+def load_autoencoder(extension, BATCH_SIZE, OBS_DIM, encoder):
+    print('Loading in network weights...')
+    # load some sample data to initialise the model
+    #         load_set = iter(self.dataset.shuffle(self.TRAIN_LEN).batch(self.BATCH_SIZE))
+    if IMAGE:
+        obs = tf.zeros((BATCH_SIZE, 48, 48, 3))
+    else:
+        obs = tf.zeros((BATCH_SIZE, OBS_DIM))
+    o,_ = encoder(obs)
+
+    print('Models Initalised')
+    encoder.load_weights(extension + '/encoder.h5')
+    print('Weights loaded.')
+    return encoder
+
+AUTOENCODE = True
+if AUTOENCODE:
+    IMAGE = False
+    LAYER_SIZE = 64
+    LATENT_DIM = 12
+    encoder = VAE_Encoder(LAYER_SIZE, LATENT_DIM)
+    encoder = load_autoencoder('saved_models/manifold_learning_states_baseline12', LAYER_SIZE, 8, encoder)
+
+
+
+
+
 def SAC(env_fn, ac_kwargs=dict(), seed=0,
                   steps_per_epoch=2000, epochs=100, replay_size=int(1e6), gamma=0.99,
                   polyak=0.995, lr=1e-3, alpha=0.2, batch_size=100, start_steps=2000,
@@ -340,6 +385,9 @@ def SAC(env_fn, ac_kwargs=dict(), seed=0,
 
     env = wrappers.FlattenDictWrapper(env, dict_keys=['observation', 'desired_goal'])
     test_env = wrappers.FlattenDictWrapper(test_env, dict_keys=['observation', 'desired_goal'])
+    if AUTOENCODE:
+        env.set_state_representation(encoder)
+        test_env.set_state_representation(encoder)
     # Get Env dimensions
     obs_dim = env.observation_space.shape[0]
     act_dim = env.action_space.shape[0]
@@ -403,7 +451,7 @@ if __name__ == '__main__':
     parser.add_argument('--render', type=bool, default=False)
     args = parser.parse_args()
 
-    experiment_name = '_' + args.env + '_Hidden_' + str(args.hid) + 'l_' + str(args.l)
+    experiment_name = 'LatentRewardButNotRep_' + args.env + '_Hidden_' + str(args.hid) + 'l_' + str(args.l)
 
     SAC(lambda: gym.make(args.env),
                   ac_kwargs=dict(hidden_sizes=[args.hid] * args.l),
